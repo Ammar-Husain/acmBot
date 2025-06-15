@@ -71,7 +71,7 @@ async def main():
 
     @app.on_message(filters.regex(r"^/edit_quiz_questions_(\w+)$"))
     async def handle_edit_quiz_questions(app, message):
-        await quizzes.edit_quiz_questions(message, db_client)
+        await questions.edit_quiz_questions(message, db_client)
 
     # questions related actions
 

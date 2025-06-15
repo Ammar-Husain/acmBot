@@ -2,8 +2,40 @@ import re
 
 from pyrogram import enums, filters
 
-from methods.quizzes import edit_quiz_questions
 from models import QuizQuestion
+
+
+def user_is_quiz_owner(user_id, quiz_id, db_client):
+    is_owner = db_client.acmbDB.users.find_one({"_id": user_id, "quizzes._id": quiz_id})
+    return bool(is_owner)
+
+
+async def edit_quiz_questions(message, db_client):
+    quiz_id = message.text.split("edit_quiz_questions_")[1]
+    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
+    if not quiz:
+        await message.reply("Quiz not found, May be it is deleted?")
+        return
+
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
+    title = quiz["title"]
+    questions = quiz["questions"]
+    questions_panel = (
+        f"<b>{title}</b>:\n"
+        f"Number of questions: {len(questions)}\n"
+        f"/add_questions_{quiz_id}\n"
+    )
+
+    for i, question in enumerate(questions):
+        questions_panel += (
+            f"{i+1}. {question['question']}\n"
+            f"/edit_question_{i+1}_{quiz_id}\t/delete_question_{i+1}_{quiz_id}\n"
+        )
+
+    await message.reply(questions_panel, quote=True)
 
 
 async def edit_question(message, db_client):
@@ -13,6 +45,10 @@ async def edit_question(message, db_client):
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
     if not quiz:
         return await message.reply("Quiz not found, may be it is deleted?", qoute=True)
+
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
 
     quiz_questions = quiz["questions"]
     if len(quiz_questions) < question_id:
@@ -53,7 +89,7 @@ async def edit_question(message, db_client):
     await message.reply("Go back with /back, exit with /exit")
 
     while True:
-        user_command = await message.from_user.listen(filters.text)
+        user_command = await user.listen(filters.text)
 
         if user_command.text == "/back":
             message.text = f"/edit_quiz_questions_{quiz_id}"
@@ -85,7 +121,7 @@ async def edit_question(message, db_client):
             await user_command.reply(
                 f"Send new value for the option `{option_text}`", quote=True
             )
-            updated_option = await user_command.from_user.listen(filters.text)
+            updated_option = await user.listen(filters.text)
             update = {
                 "$set": {
                     f"questions.{question_id-1}.options.{option_id-1}.text": updated_option.text
@@ -125,7 +161,7 @@ async def edit_question(message, db_client):
                 quote=True,
             )
 
-            confirmation_message = await user_command.from_user.listen(filters.text)
+            confirmation_message = await user.listen(filters.text)
             if confirmation_message.text != "/yes":
                 await confirmation_message.reply("Option delteion cancelled")
                 continue
@@ -148,7 +184,7 @@ async def edit_question(message, db_client):
                     f'{"\n".join([f"/option_{i}" for i in range(1, len(options)+1)])}\n'
                     "send /cancel to cancel"
                 )
-                corr_op_message = await user_command.from_user.listen(filters.text)
+                corr_op_message = await user.listen(filters.text)
                 corr_option = corr_op_message.text
                 valid_option = re.match(r"^/option_([1-9])$", corr_option)
                 if valid_option:
@@ -205,6 +241,10 @@ async def add_options(message, db_client):
         await message.reply("Quiz not found, may be it is deleted?", quote=True)
         return
 
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
     questions = quiz["questions"]
 
     if question_id > len(questions):
@@ -222,7 +262,7 @@ async def add_options(message, db_client):
     )
 
     while True:
-        option_message = await message.from_user.listen(filters.text)
+        option_message = await user.listen(filters.text)
         if option_message.text == "/exit":
             option_message.text = f"/edit_question_{question_id}_{quiz_id}"
             return await edit_question(option_message, db_client)
@@ -240,7 +280,7 @@ async def add_options(message, db_client):
             "option added\nsend /add_another_option to add another option, /exit or anything else to exit"
         )
 
-        another = await option_message.from_user.listen(filters.text)
+        another = await user.listen(filters.text)
         if another.text == "/add_another_option":
             await another.reply("Send the option text, /exit to exit")
         else:
@@ -257,6 +297,10 @@ async def delete_question(message, db_client):
         await message.reply("Quiz not found, may be it is deleted?", quote=True)
         return
 
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
     questions = quiz["questions"]
     questions_count = len(questions)
     if question_id > questions_count:
@@ -270,7 +314,7 @@ async def delete_question(message, db_client):
         f"that says `{question['question']}`?\n"
         "to confirm send /yes to cancel send /cancel or anythin else"
     )
-    confirmation_message = await message.from_user.listen(filters.text)
+    confirmation_message = await user.listen(filters.text)
     if confirmation_message.text != "/yes":
         await confirmation_message.reply("Cancelled")
     else:
@@ -297,6 +341,9 @@ async def add_questions(message, db_client):
         return await message.reply("Quiz not found, may be it is deleted?")
 
     user = message.from_user
+
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
 
     await message.reply(
         "You can start sending your quiz questions as polls (must be in <b>quiz mode</b>).\n"

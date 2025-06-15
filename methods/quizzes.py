@@ -3,13 +3,17 @@ from pyrogram import enums, filters
 from models import Quiz, QuizPreview, QuizQuestion
 
 
+def user_is_quiz_owner(user_id, quiz_id, db_client):
+    is_owner = db_client.acmbDB.users.find_one({"_id": user_id, "quizzes._id": quiz_id})
+    return bool(is_owner)
+
+
 async def create_quiz(message, db_client):
     await message.reply(
         "Let's Create a new Quiz together!, send your new quizz title, or /cancel_quiz to cancel.",
         quote=True,
     )
     user = message.from_user
-
     title_message = await user.listen(filters.text)
     if title_message.text == "/cancel_quiz":
         await title_message.reply("Cancelled.", quote=True)
@@ -124,13 +128,17 @@ async def delete_quiz(message, db_client):
         await message.reply("Quiz not found, May be it is already deleted.", quote=True)
         return
 
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
     title = quiz["title"]
     await message.reply(
         f"Are you sure you want to delete quiz <b>{title}</b>?\n"
         "to confirm send /yes to cancel send /cancel or anything else.",
         quote=True,
     )
-    confirmation_message = await message.from_user.listen()
+    confirmation_message = await user.listen()
 
     if not confirmation_message.text == "/yes":
         await confirmation_message.reply("Quiz Deletion Cancelled.", quote=True)
@@ -153,6 +161,11 @@ async def edit_title(message, db_client):
     await message.reply(
         f"changing the title of <b>`{title}`</b> quiz, send the new title, or /cancel to cancel"
     )
+
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
     title_message = await user.listen(filters.text)
     new_title = title_message.text
     if new_title == "/cancel":
@@ -178,6 +191,10 @@ async def edit_description(message, db_client):
     if not quiz:
         await message.reply("Quiz not found, may be it is deleted?", quote=True)
         return
+
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
 
     description = quiz["description"]
     title = quiz["title"]
@@ -226,27 +243,3 @@ async def edit_description(message, db_client):
         await description_message.reply(
             f"Quiz <b>{title}</b> description has been removed.", quote=True
         )
-
-
-async def edit_quiz_questions(message, db_client):
-    quiz_id = message.text.split("edit_quiz_questions_")[1]
-    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
-    if not quiz:
-        await message.reply("Quiz not found, May be it is deleted?")
-        return
-
-    title = quiz["title"]
-    questions = quiz["questions"]
-    questions_panel = (
-        f"<b>{title}</b>:\n"
-        f"Number of questions: {len(questions)}\n"
-        f"/add_questions_{quiz_id}\n"
-    )
-
-    for i, question in enumerate(questions):
-        questions_panel += (
-            f"{i+1}. {question['question']}\n"
-            f"/edit_question_{i+1}_{quiz_id}\t/delete_question_{i+1}_{quiz_id}\n"
-        )
-
-    await message.reply(questions_panel, quote=True)
