@@ -97,8 +97,8 @@ class Quiz:
 
 
 class QuizPreview:
-    def __init__(self, quiz: Quiz, id):
-        self._id = id
+    def __init__(self, quiz: Quiz):
+        self._id = quiz.id
         self.title = quiz.title
         self.description = quiz.description
         self.questions_count = len(quiz.questions)
