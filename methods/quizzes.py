@@ -1,4 +1,5 @@
 from pyrogram import enums, filters
+from pyrogram.types import PollOption
 
 from models import Quiz, QuizPreview, QuizQuestion
 
@@ -116,7 +117,9 @@ async def my_quizzes(message, db_client):
         await message.reply(
             f"{i+1}. <u><b>{title}</b><u>\t /edit_title_{id}\n\n"
             f"Description: {description or "No Description"}\t /edit_description_{id}\n\n"
-            f"Number of questions: {questions_count}\t /edit_quiz_questions_{id}\n\n"
+            f"Number of questions: {questions_count}\n"
+            f"/edit_quiz_questions_{id}\n\n"
+            f"/test_quiz_{id}\n\n"
             f"/delete_quiz_{id}"
         )
 
@@ -242,4 +245,29 @@ async def edit_description(message, db_client):
     else:
         await description_message.reply(
             f"Quiz <b>{title}</b> description has been removed.", quote=True
+        )
+
+
+async def test_quiz(message, db_client):
+    quiz_id = message.text.split("test_quiz_")[1]
+    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
+    if not quiz:
+        return await message.reply("Quiz not found, may be it is deleted?")
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        await message.reply("Only quiz owner can do this")
+
+    questions = quiz["questions"]
+    for question in questions:
+        options = [PollOption(option["text"]) for option in question["options"]]
+        correct_option_id = [
+            i for i, option in enumerate(question["options"]) if option["is_correct"]
+        ][0]
+        quiz_type = enums.PollType.QUIZ
+        await message.reply_poll(
+            question["question"],
+            options=options,
+            type=quiz_type,
+            correct_option_id=correct_option_id,
+            explanation=question["explanation"],
         )

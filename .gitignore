@@ -1,3 +1,5 @@
 .env
 *.session
 *.json
+login.py
+__pycache__
