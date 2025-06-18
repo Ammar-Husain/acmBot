@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timedelta
 
 from pymongo.mongo_client import asyncio
 from pyrogram import filters
@@ -344,6 +345,7 @@ async def begin_teams_competition(
         ][0]
         explanation = question["explanation"]
 
+        close_date = datetime.now() + timedelta(seconds=question_time + 1)
         round_polls = {}
         for team in valid_teams:
             if question["media"]:
@@ -352,7 +354,7 @@ async def begin_teams_competition(
                     await photo_message.copy(team["_id"], caption="")
 
             poll_message = await app.send_poll(
-                team["_id"], question_text, options, open_period=question_time
+                team["_id"], question_text, options, close_date=close_date
             )
             await poll_message.reply(f"You have {question_time} seconds to vote!")
 
@@ -372,13 +374,13 @@ async def begin_teams_competition(
         )
 
         broadcast_groups = valid_groups_ids + [comp_chat.id]
-        await asyncio.sleep(question_time / 2)
+        await asyncio.sleep(question_time / 2 - 1)
         await broadcast(app, broadcast_groups, f"{question_time // 2} seconds left!.")
 
-        await asyncio.sleep(question_time / 4)
+        await asyncio.sleep(question_time / 4 - 1)
         await broadcast(app, broadcast_groups, f"{question_time // 4} seconds left!.")
 
-        left_for_3 = question_time / 4 - 3
+        left_for_3 = (close_date - datetime.now()).seconds - 3
         print(left_for_3)
         await asyncio.sleep(left_for_3)
 
@@ -481,7 +483,7 @@ async def begin_teams_competition(
         )
     else:
         winning_team_message_text = (
-            "<b>We Have A Tie</b> 🤯\n\n"
+            "<b>We Have A Tie!!</b> 🤯\n\n"
             "Congratulations To:\n\n"
             f"{"\n\n".join([ "<b>" + first + ' 🎉 🎉 🎉' + "</b>" for first in firsts])}"
         )

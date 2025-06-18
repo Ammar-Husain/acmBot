@@ -10,7 +10,7 @@ from pyrogram.types import (
     Message,
 )
 
-from methods import common, competitions, mongo, questions, quizzes, teams
+from methods import competitions, mongo, questions, quizzes, teams
 from models import NewBotUser
 
 buttons_counters = {}
@@ -33,6 +33,9 @@ async def main():
     print("Bot started")
 
     db_client = mongo.connect_to_mongo(DB_URI)
+    if not os.getenv("PRODUCTION"):
+        db_client = db_client.test
+
     print("DataBase connected")
 
     await app.set_bot_commands(
