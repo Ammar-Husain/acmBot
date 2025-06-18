@@ -10,7 +10,7 @@ def allow_external(_, __, update):
     return (
         not "media" in update.text
         and not "explanation" in update.text
-        and not "delete_question"
+        and not "delete_question" in update.text
     )
 
 

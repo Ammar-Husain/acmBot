@@ -18,9 +18,10 @@ async def is_admin(chat_or_id, user_id, app=None):
             user_as_member = await chat_or_id.get_member(user_id)
         else:
             return False
-
+        print(user_as_member.status)
         return user_as_member.status == ChatMemberStatus.ADMINISTRATOR
-    except:
+    except Exception as e:
+        print(f"Error: {e}")
         return False
 
 
@@ -287,7 +288,7 @@ async def begin_teams_competition(
     ]
     user_teams = user_data["teams"]
     valid_teams = [team for team in user_teams if team["_id"] in valid_groups_ids]
-
+    print(valid_teams)
     await asyncio.sleep(3)
     await message.reply(
         "When everyone is ready <b>any admin</b> can send /start_competition to start",
@@ -315,7 +316,7 @@ async def begin_teams_competition(
         if not sender_id == comp_creator_id and not await is_admin(
             comp_chat, sender_id
         ):
-            await message.reply(SELLY_REPLIES[0])
+            await start_command_message.reply(SELLY_REPLIES[0], quote=True)
             if len(SELLY_REPLIES) > 1:
                 SELLY_REPLIES.pop(0)
         else:
@@ -394,7 +395,7 @@ async def begin_teams_competition(
 
         await asyncio.sleep(1)
         await broadcast(app, valid_groups_ids, "Results are in the group!")
-        await asyncio.sleep(3)
+        await asyncio.sleep(7)
 
         await app.send_message(comp_chat.id, "<u><b>The Correct Answer is:</b></u>\n\n")
         await asyncio.sleep(3)
@@ -445,7 +446,7 @@ async def begin_teams_competition(
             next_command = await results_message.chat.listen(filters.command("next"))
             sender_id = next_command.from_user.id
             if not sender_id == comp_creator_id and not is_admin(comp_chat, sender_id):
-                await message.reply(SELLY_REPLIES[0])
+                await next_command.reply(SELLY_REPLIES[0], quote=True)
                 if len(SELLY_REPLIES) > 1:
                     SELLY_REPLIES.pop(0)
             else:
