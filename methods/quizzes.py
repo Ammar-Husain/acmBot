@@ -1,18 +1,19 @@
 from pyrogram import enums, filters
 from pyrogram.types import PollOption
 
-from methods.common import MEDIA_CHAT, user_is_quiz_owner, users_only
+from methods.common import get_media_chat, user_is_quiz_owner, users_only
 from models import Quiz, QuizPreview, QuizQuestion
 
 
 @users_only
-async def create_quiz(message, db_client):
+async def create_quiz(app, message, db_client):
     await message.reply(
         "Let's Create a new Quiz together!, send your new quizz title (the title will appear in the competations), or /cancel_quiz to cancel.",
         quote=True,
     )
     user = message.from_user
     title_message = await user.listen(filters.text)
+    print(title_message.text)
     if title_message.text == "/cancel_quiz":
         await title_message.reply("Cancelled.", quote=True)
         return
@@ -40,6 +41,7 @@ async def create_quiz(message, db_client):
     )
     quiz = Quiz(title=title, description=description, questions=[])
     photos_messages_ids = []
+    media_chat = await get_media_chat(app)
     while True:
         question_message = await user.listen()
         if question_message.photo:
@@ -50,7 +52,7 @@ async def create_quiz(message, db_client):
                 continue
 
             photo_message = await question_message.copy(
-                MEDIA_CHAT, caption=str(user.id)
+                media_chat.id, caption=str(user.id)
             )
             photos_messages_ids.append(photo_message.id)
 
@@ -299,11 +301,11 @@ async def test_quiz(app, message, db_client):
             f"This quiz is empty!, add some questions to it by /add_questions_{quiz_id}",
             quote=True,
         )
-
+    media_chat = await get_media_chat(app)
     for question in questions:
         if question["media"]:
             for image_id in question["media"]:
-                image_message = await app.get_messages(MEDIA_CHAT, image_id)
+                image_message = await app.get_messages(media_chat.id, image_id)
                 await image_message.copy(message.chat.id, caption="")
 
         options = [PollOption(option["text"]) for option in question["options"]]

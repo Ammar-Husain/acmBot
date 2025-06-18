@@ -2,7 +2,7 @@ import re
 
 from pyrogram import enums, filters
 
-from methods.common import MEDIA_CHAT, user_is_quiz_owner, users_only
+from methods.common import get_media_chat, user_is_quiz_owner, users_only
 from models import QuizQuestion
 
 
@@ -405,7 +405,7 @@ async def delete_question(message, db_client):
 
 
 @users_only
-async def add_questions(message, db_client):
+async def add_questions(app, message, db_client):
     quiz_id = message.text.split("add_questions_")[1]
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
     if not quiz:
@@ -432,7 +432,9 @@ async def add_questions(message, db_client):
                     "maximum 3 images per question, /unsave to be able to add."
                 )
                 continue
-            photo_message = await question_message.copy(MEDIA_CHAT, caption=user.id)
+            media_chat = await get_media_chat(app)
+
+            photo_message = await question_message.copy(media_chat.id, caption=user.id)
 
             photos_messages_ids.append(photo_message.id)
             await question_message.reply(
@@ -510,7 +512,8 @@ async def get_media(app, message):
     user = message.from_user
     image_message_id = int(message.text.split("_")[1])
     try:
-        image_message = await app.get_messages(MEDIA_CHAT, image_message_id)
+        media_chat = await get_media_chat(app)
+        image_message = await app.get_messages(media_chat.id, image_message_id)
         image_owner_id = int(image_message.caption)
     except Exception as e:
         return await message.reply("Media doesn't exist")
@@ -522,7 +525,7 @@ async def get_media(app, message):
 
 
 @users_only
-async def add_media(message, db_client):
+async def add_media(app, message, db_client):
     parts = message.text.split("_")
     question_id, quiz_id = int(parts[2]), parts[3]
 
@@ -559,7 +562,8 @@ async def add_media(message, db_client):
             await photo_message.reply("send a photo, /done or /cancel only")
             continue
 
-        saved_photo = await photo_message.copy(MEDIA_CHAT, caption=user.id)
+        media_chat = await get_media_chat(app)
+        saved_photo = await photo_message.copy(media_chat.id, caption=user.id)
         new_media.append(saved_photo.id)
         if len(new_media) + len(media) < 3:
             await photo_message.reply(
@@ -629,9 +633,10 @@ async def delete_media(app, message, db_client):
     db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, update)
 
     try:
-        media_in_db = await app.get_messages(MEDIA_CHAT, media_id)
+        media_chat = await get_media_chat(app)
+        media_in_db = await app.get_messages(media_chat.id, media_id)
         await media_in_db.copy(
-            MEDIA_CHAT,
+            media_chat.id,
             caption=f"{user.username}: {user.first_name} {user.last_name}: {user.id}",
         )
         await media_in_db.delete()

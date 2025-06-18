@@ -10,7 +10,7 @@ from pyrogram.types import (
     Message,
 )
 
-from methods import competitions, mongo, questions, quizzes, teams
+from methods import common, competitions, mongo, questions, quizzes, teams
 from models import NewBotUser
 
 buttons_counters = {}
@@ -83,7 +83,7 @@ async def main():
     # quizzes related actions
     @app.on_message(filters.private & filters.command("create_quiz"))
     async def handle_create_quiz(app, message):
-        await quizzes.create_quiz(message, db_client)
+        await quizzes.create_quiz(app, message, db_client)
 
     @app.on_message(filters.private & filters.command("my_quizzes"))
     async def handle_my_quizzes(app, message: Message):
@@ -123,11 +123,11 @@ async def main():
 
     @app.on_message(filters.private & filters.regex(r"^/add_questions_(\w+)$"))
     async def handle_add_questions(app, message):
-        await questions.add_questions(message, db_client)
+        await questions.add_questions(app, message, db_client)
 
     @app.on_message(filters.private & filters.regex(r"^/add_media_([0-9]*)_(\w+)$"))
     async def handle_add_media(app, message):
-        await questions.add_media(message, db_client)
+        await questions.add_media(app, message, db_client)
 
     @app.on_message(filters.private & filters.regex(r"^/media_([0-9]*)$"))
     async def handle_get_media(app, message):

@@ -5,7 +5,7 @@ from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import Chat, InlineKeyboardButton, InlineKeyboardMarkup, PollOption
 
-from methods.common import MEDIA_CHAT, check_bot_status_in_chat, users_only
+from methods.common import check_bot_status_in_chat, get_media_chat, users_only
 from methods.teams import my_sets
 
 
@@ -327,6 +327,7 @@ async def begin_teams_competition(
         teams_results[team["_id"]] = []
 
     await asyncio.sleep(1)
+    media_chat = await get_media_chat(app)
     for i, question in enumerate(questions):
         await start_command_message.reply("3", quote=False)
         await asyncio.sleep(1)
@@ -347,7 +348,7 @@ async def begin_teams_competition(
         for team in valid_teams:
             if question["media"]:
                 for image_id in question["media"]:
-                    photo_message = await app.get_messages(MEDIA_CHAT, image_id)
+                    photo_message = await app.get_messages(media_chat.id, image_id)
                     await photo_message.copy(team["_id"], caption="")
 
             poll_message = await app.send_poll(
@@ -359,7 +360,7 @@ async def begin_teams_competition(
 
         if question["media"]:
             for image_id in question["media"]:
-                photo_message = await app.get_messages(MEDIA_CHAT, image_id)
+                photo_message = await app.get_messages(media_chat.id, image_id)
                 await photo_message.copy(comp_chat.id, caption="")
 
         question_message_text = f"{question_text}\n\n" + "\n".join(

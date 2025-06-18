@@ -3,9 +3,23 @@ import os
 if not os.getenv("PRODUCTION"):
     import dotenv
 
-    MEDIA_CHAT = dotenv.dotenv_values()["MEDIA_CHAT"]
+    MEDIA_CHAT_ID = dotenv.dotenv_values()["MEDIA_CHAT_ID"]
 else:
-    MEDIA_CHAT = os.getenv("MEDIA_CHAT")
+    MEDIA_CHAT_ID = os.getenv("MEDIA_CHAT_ID")
+
+if not isinstance(MEDIA_CHAT_ID, int):
+    print("was string")
+    MEDIA_CHAT_ID = int(MEDIA_CHAT_ID)
+if MEDIA_CHAT_ID > 0:
+    print("was positive")
+    MEDIA_CHAT_ID = MEDIA_CHAT_ID * -1
+
+
+async def get_media_chat(app):
+    chat = await app.get_chat(MEDIA_CHAT_ID)
+    print(f"got chat {chat.title}")
+    return chat
+
 
 from pymongo import MongoClient
 from pyrogram.types import Message
