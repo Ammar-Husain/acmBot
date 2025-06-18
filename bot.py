@@ -38,6 +38,7 @@ async def main():
     await app.set_bot_commands(
         [
             BotCommand("start", "start the bot"),
+            BotCommand("help", "Show Instructions"),
             BotCommand("create_quiz", "create new quiz"),
             BotCommand("my_quizzes", "manage your quizzes"),
             BotCommand("add_teams", "add teams"),
@@ -60,6 +61,24 @@ async def main():
         user = users.find_one({"_id": message.from_user.id})
         if not user:
             users.insert_one(NewBotUser(message.from_user.id).as_dict())
+
+    @app.on_message(filters.private & filters.command("help"))
+    async def handle_help(app, message):
+        instructions = (
+            "<u><b>Bot Usage Manual:</b></u>\n\n"
+            "Steps to To Start A Competition:\n\n"
+            "1. Create a quiz from /create_quiz or obtain link for a quiz created by another user.\n\n"
+            "2. Create you teams from /add_teams\n\n."
+            "3. Bot your teams In a set from /create_set.\n\n"
+            "4. Configure your competition from /start_competition and obtain a starting button.\n\n"
+            "5. When You are ready press the button and choose the group in which the competition will be held, and let the rest to the Bot!!"
+        )
+        second = (
+            "You can edit your (add / edit / delete ) quizzes/questions/options in /my_quizzes\n\n"
+            "You can edit your teams and sets in /my_teams / /my_sets"
+        )
+        await message.reply(instructions)
+        await message.reply(second)
 
     # quizzes related actions
     @app.on_message(filters.private & filters.command("create_quiz"))
