@@ -424,6 +424,7 @@ async def add_questions(message, db_client):
     )
     photos_messages_ids = []
     while True:
+        print("listening")
         question_message = await user.listen()
         if question_message.photo:
             if len(photos_messages_ids) == 3:
@@ -431,7 +432,8 @@ async def add_questions(message, db_client):
                     "maximum 3 images per question, /unsave to be able to add."
                 )
                 continue
-            photo_message = await question_message.forward(MEDIA_CHAT)
+            photo_message = await question_message.copy(MEDIA_CHAT, caption=user.id)
+
             photos_messages_ids.append(photo_message.id)
             await question_message.reply(
                 "This photo has been saved for the next quiz\n"
@@ -509,14 +511,14 @@ async def get_media(app, message):
     image_message_id = int(message.text.split("_")[1])
     try:
         image_message = await app.get_messages(MEDIA_CHAT, image_message_id)
-        image_owner_id = image_message.forward_origin.sender_user.id
+        image_owner_id = int(image_message.caption)
     except Exception as e:
         return await message.reply("Media doesn't exist")
 
     if not user.id == image_owner_id:
         return await message.reply("This photo is not yours.")
 
-    await image_message.copy(user.id)
+    await image_message.copy(user.id, caption="")
 
 
 @users_only
@@ -547,7 +549,7 @@ async def add_media(message, db_client):
     new_media = []
     await message.reply("You can send a photo or send /cancel to cancel")
     while True:
-        photo_message = await user.listen()
+        photo_message = await user.listen(filters.private)
 
         if photo_message.text == "/cancel":
             return await photo_message.reply("Cancelled")
@@ -557,13 +559,7 @@ async def add_media(message, db_client):
             await photo_message.reply("send a photo, /done or /cancel only")
             continue
 
-        if photo_message.forward_origin:
-            await photo_message.reply(
-                "please send the photo directly or hide sender name if you want to frowarded it from another chat."
-            )
-            continue
-
-        saved_photo = await photo_message.forward(MEDIA_CHAT)
+        saved_photo = await photo_message.copy(MEDIA_CHAT, caption=user.id)
         new_media.append(saved_photo.id)
         if len(new_media) + len(media) < 3:
             await photo_message.reply(

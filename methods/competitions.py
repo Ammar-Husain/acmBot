@@ -113,6 +113,7 @@ async def start_competition(app, message, db_client):
 
 
 async def solo_competition_button(message, quiz_id, question_time):
+    return await message.reply("Not Implemented yet")
     query = f"{quiz_id},{question_time}"
     encoded_query = base64.b64encode(query.encode()).decode()
     start_button = InlineKeyboardButton(
@@ -132,9 +133,9 @@ async def teams_competition_button(app, message, quiz_id, question_time, db_clie
         "Choose the set of teams those will participate in the competition", quote=True
     )
     await my_sets(message, db_client, for_comp=True)
-    set_message = await user.listen(filters.text)
+    set_message = await user.listen(filters.private & filters.text)
     parts = set_message.text.split("set_")
-    if not len(parts) == 2 and parts[1].isnumeric():
+    if not (len(parts) == 2 and parts[1].isnumeric()):
         await set_message.reply("Invalid set, please choose from the options")
 
     set_order = int(parts[1])
@@ -195,7 +196,6 @@ async def teams_competition_button(app, message, quiz_id, question_time, db_clie
 
 
 async def begin_solo_competition(message, quiz_id, question_time, db_client):
-    await message.replu("Not yet Implemented.")
     user = message.from_user
     return
 
@@ -348,7 +348,7 @@ async def begin_teams_competition(
             if question["media"]:
                 for image_id in question["media"]:
                     photo_message = await app.get_messages(MEDIA_CHAT, image_id)
-                    await photo_message.copy(team["_id"])
+                    await photo_message.copy(team["_id"], caption="")
 
             poll_message = await app.send_poll(
                 team["_id"], question_text, options, open_period=question_time
@@ -360,7 +360,7 @@ async def begin_teams_competition(
         if question["media"]:
             for image_id in question["media"]:
                 photo_message = await app.get_messages(MEDIA_CHAT, image_id)
-                await photo_message.copy(comp_chat.id)
+                await photo_message.copy(comp_chat.id, caption="")
 
         question_message_text = f"{question_text}\n\n" + "\n".join(
             [option.text for option in options]
@@ -391,12 +391,12 @@ async def begin_teams_competition(
 
         await asyncio.sleep(1)
         await broadcast(app, valid_groups_ids, "Results are in the group!")
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
 
         await app.send_message(comp_chat.id, "<u><b>The Correct Answer is:</b></u>\n\n")
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
         await app.send_message(comp_chat.id, "\U0001F941  " * 3)
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
         correct_answer_message_text = (
             f"<b>{OPTIONS_LETTERS[correct_option_id]} \U00002705</b>\n\n"
             f"<b>{options[correct_option_id].text}</b>"

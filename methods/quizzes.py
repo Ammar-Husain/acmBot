@@ -49,7 +49,9 @@ async def create_quiz(message, db_client):
                 )
                 continue
 
-            photo_message = await question_message.forward(MEDIA_CHAT)
+            photo_message = await question_message.copy(
+                MEDIA_CHAT, caption=str(user.id)
+            )
             photos_messages_ids.append(photo_message.id)
 
             await question_message.reply(
@@ -302,7 +304,7 @@ async def test_quiz(app, message, db_client):
         if question["media"]:
             for image_id in question["media"]:
                 image_message = await app.get_messages(MEDIA_CHAT, image_id)
-                await image_message.copy(message.chat.id)
+                await image_message.copy(message.chat.id, caption="")
 
         options = [PollOption(option["text"]) for option in question["options"]]
         correct_option_id = [

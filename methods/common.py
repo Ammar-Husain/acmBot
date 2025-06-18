@@ -36,7 +36,13 @@ def user_is_quiz_owner(user_id, quiz_id, db_client):
 
 
 from pyrogram.enums import ChatMemberStatus
-from pyrogram.errors import ChannelInvalid, ChannelPrivate, UserNotParticipant
+from pyrogram.errors import (
+    ChannelIdInvalid,
+    ChannelInvalid,
+    ChannelPrivate,
+    ChatIdInvalid,
+    UserNotParticipant,
+)
 
 
 async def check_bot_status_in_chat(app, chat_id):
@@ -51,7 +57,7 @@ async def check_bot_status_in_chat(app, chat_id):
     except ChannelPrivate:
         pass
 
-    except ChannelInvalid:
+    except (ChannelIdInvalid, ChannelInvalid, ChatIdInvalid):
         if str(chat_id).startswith("-100"):
             return await check_bot_status_in_chat(app, chat_id + 1000000000000)
 
