@@ -2,14 +2,22 @@ import re
 
 from pyrogram import enums, filters
 
+from methods.common import MEDIA_CHAT, user_is_quiz_owner, users_only
 from models import QuizQuestion
 
 
-def user_is_quiz_owner(user_id, quiz_id, db_client):
-    is_owner = db_client.acmbDB.users.find_one({"_id": user_id, "quizzes._id": quiz_id})
-    return bool(is_owner)
+def allow_external(_, __, update):
+    return (
+        not "media" in update.text
+        and not "explanation" in update.text
+        and not "delete_question"
+    )
 
 
+allow_external_filter = filters.create(allow_external)
+
+
+@users_only
 async def edit_quiz_questions(message, db_client):
     quiz_id = message.text.split("edit_quiz_questions_")[1]
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
@@ -32,12 +40,13 @@ async def edit_quiz_questions(message, db_client):
     for i, question in enumerate(questions):
         questions_panel += (
             f"{i+1}. {question['question']}\n"
-            f"/edit_question_{i+1}_{quiz_id}\t/delete_question_{i+1}_{quiz_id}\n"
+            f"/edit_question_{i+1}_{quiz_id}\n/delete_question_{i+1}_{quiz_id}\n\n"
         )
 
     await message.reply(questions_panel, quote=True)
 
 
+@users_only
 async def edit_question(message, db_client):
     parts = message.text.split("_")
     question_id, quiz_id = int(parts[2]), parts[3]
@@ -62,7 +71,8 @@ async def edit_question(message, db_client):
     question_panel = (
         f"<b>{quiz['title']}</b>:\n"
         f"{question_id}. {question['question']}\n"
-        f"/add_options_{question_id}_{quiz_id}\t/delete_question_{question_id}_{quiz_id}\n"
+        f"/delete_question_{question_id}_{quiz_id}\n\n"
+        f"/add_options_{question_id}_{quiz_id}\n\n"
     )
 
     correct_options_ids = []
@@ -83,16 +93,42 @@ async def edit_question(message, db_client):
 
     correct_option_id = correct_options_ids[0]
 
-    question_panel += f"Correct option: {correct_option_id + 1}\t/change_correct_option"
+    question_panel += (
+        f"Correct option: {correct_option_id + 1}\t/change_correct_option\n\n"
+    )
+
+    explanation = question["explanation"]
+    if explanation:
+        question_panel += (
+            f"Explanation: {explanation}\n/edit_explanation_{question_id}_{quiz_id}\n\n"
+        )
+    else:
+        question_panel += f"Explanation: No Explanation\n/edit_explanation_{question_id}_{quiz_id}\n\n"
+
+    media = question["media"]
+    if media:
+        media_text = [
+            f"/media_{j} \n /delete_media_{i+1}_{question_id}_{quiz_id}\n"
+            for i, j in enumerate(media)
+        ]
+        question_panel += f"Media:\n{"\n".join(media_text)}\n"
+    else:
+        question_panel += "Media: No Media\n"
+
+    if len(media) < 3:
+        question_panel += f"/add_media_{question_id}_{quiz_id}"
 
     await message.reply(question_panel, quote=True)
     await message.reply("Go back with /back, exit with /exit")
 
     while True:
-        user_command = await user.listen(filters.text)
+        try:
+            user_command = await user.listen(filters.text & allow_external_filter)
+        except:
+            return
 
         if user_command.text == "/back":
-            message.text = f"/edit_quiz_questions_{quiz_id}"
+            user_command.text = f"/edit_quiz_questions_{quiz_id}"
             return await edit_quiz_questions(message, db_client)
 
         elif user_command.text == "/exit":
@@ -232,6 +268,40 @@ async def edit_question(message, db_client):
         return
 
 
+@users_only
+async def edit_question_explanation(message, db_client):
+    user = message.from_user
+    await user.stop_listening()
+    parts = message.text.split("_")
+    question_id, quiz_id = int(parts[2]), parts[3]
+    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
+
+    if not quiz:
+        return await message.reply("Quiz not found")
+
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
+    if question_id > len(quiz["questions"]):
+        return await message.reply(
+            f"Question not found, quiz only contain {len(quiz['questions'])} questions"
+        )
+
+    await message.reply("Send new explanation\nsend /cancel to cancel")
+    exp_message = await user.listen(filters.text)
+    if exp_message.text == "/cancel":
+        return await exp_message.reply("Cancelled", quote=True)
+
+    exp = exp_message.text
+    update = {"$set": {f"questions.{question_id-1}.explanation": exp}}
+    db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, update)
+
+    await exp_message.reply("Explanation updated succefully.")
+    exp_message.text = f"edit_question_{question_id}_{quiz_id}"
+    await edit_question(exp_message, db_client)
+
+
+@users_only
 async def add_options(message, db_client):
     parts = message.text.split("_")
     question_id, quiz_id = int(parts[2]), parts[3]
@@ -270,7 +340,6 @@ async def add_options(message, db_client):
         new_option = {
             "text": option_message.text,
             "is_correct": False,
-            # "entities": option_message.entities,
         }
 
         update = {"$push": {f"questions.{question_id-1}.options": new_option}}
@@ -289,6 +358,7 @@ async def add_options(message, db_client):
             return
 
 
+@users_only
 async def delete_question(message, db_client):
     parts = message.text.split("_")
     question_id, quiz_id = int(parts[2]), parts[3]
@@ -304,10 +374,10 @@ async def delete_question(message, db_client):
     questions = quiz["questions"]
     questions_count = len(questions)
     if question_id > questions_count:
-        await message.reply(
-            f"Quiz {quiz['title']} contain only {questions_count}, no question is number {question_id}"
+        return await message.reply(
+            f"Question not found quiz {quiz['title']} contain only {questions_count}"
         )
-
+    await user.stop_listening()
     question = questions[question_id - 1]
     await message.reply(
         f"Are you sure you want to delete question number {question_id} of quiz <b>{quiz['title']}</b> "
@@ -334,6 +404,7 @@ async def delete_question(message, db_client):
         await edit_quiz_questions(confirmation_message, db_client)
 
 
+@users_only
 async def add_questions(message, db_client):
     quiz_id = message.text.split("add_questions_")[1]
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
@@ -347,11 +418,40 @@ async def add_questions(message, db_client):
 
     await message.reply(
         "You can start sending your quiz questions as polls (must be in <b>quiz mode</b>).\n"
+        "You can send up to 3 photos to be send before the question\n"
         "When you are done send /done",
         quote=True,
     )
+    photos_messages_ids = []
     while True:
         question_message = await user.listen()
+        if question_message.photo:
+            if len(photos_messages_ids) == 3:
+                await question_message.reply(
+                    "maximum 3 images per question, /unsave to be able to add."
+                )
+                continue
+            photo_message = await question_message.forward(MEDIA_CHAT)
+            photos_messages_ids.append(photo_message.id)
+            await question_message.reply(
+                "This photo has been saved for the next quiz\n"
+                "if you send it accedentily you can /unsave it",
+                quote=True,
+            )
+            continue
+
+        if question_message.text == "/unsave":
+            if photos_messages_ids:
+                photos_messages_ids.pop(-1)
+                await question_message.reply(
+                    "The last photo has been removed, you can continue", quote=True
+                )
+                continue
+            else:
+                await question_message.reply(
+                    "There is no photos to be unsaved, you can continue", quote=True
+                )
+                continue
 
         if question_message.text == "/done":
             question_message.text = f"/edit_quiz_questions_{quiz_id}"
@@ -362,7 +462,7 @@ async def add_questions(message, db_client):
         if not poll:
             await question_message.reply(
                 "You must send the question as a poll to add it to the quiz.\n"
-                "To save the quiz or cancel it use /save_quiz or /cancel_quiz",
+                "If you are done send /done",
                 quote=True,
             )
             continue
@@ -375,7 +475,7 @@ async def add_questions(message, db_client):
             continue
 
         try:
-            question = QuizQuestion(question_message)
+            question = QuizQuestion(question_message, media=photos_messages_ids)
         except ValueError:
             await question_message.reply(
                 "for the bot to get access to the solution of a forwarded quiz it must be closed.\n"
@@ -386,6 +486,8 @@ async def add_questions(message, db_client):
                 quote=True,
             )
             continue
+        else:
+            photos_messages_ids = []
 
         quizzes_update = {"$push": {"questions": question.as_dict()}}
         db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, quizzes_update)
@@ -399,3 +501,147 @@ async def add_questions(message, db_client):
             "Question Added, you can send another question or send /done when you are done.",
             quote=True,
         )
+
+
+@users_only
+async def get_media(app, message):
+    user = message.from_user
+    image_message_id = int(message.text.split("_")[1])
+    try:
+        image_message = await app.get_messages(MEDIA_CHAT, image_message_id)
+        image_owner_id = image_message.forward_origin.sender_user.id
+    except Exception as e:
+        return await message.reply("Media doesn't exist")
+
+    if not user.id == image_owner_id:
+        return await message.reply("This photo is not yours.")
+
+    await image_message.copy(user.id)
+
+
+@users_only
+async def add_media(message, db_client):
+    parts = message.text.split("_")
+    question_id, quiz_id = int(parts[2]), parts[3]
+
+    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
+    if not quiz:
+        return await message.reply("Quiz not found")
+
+    user = message.from_user
+    await user.stop_listening()
+
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
+    questions = quiz["questions"]
+    if question_id > len(questions):
+        return await message.reply(
+            f"Question not found, quiz contain only {len(questions)} questions"
+        )
+
+    media = questions[question_id - 1]["media"]
+    if len(media) >= 3:
+        return await message.reply("Maximum 3 images per question, delete sum")
+
+    new_media = []
+    await message.reply("You can send a photo or send /cancel to cancel")
+    while True:
+        photo_message = await user.listen()
+
+        if photo_message.text == "/cancel":
+            return await photo_message.reply("Cancelled")
+        if photo_message.text == "/done":
+            break
+        if not photo_message.photo:
+            await photo_message.reply("send a photo, /done or /cancel only")
+            continue
+
+        if photo_message.forward_origin:
+            await photo_message.reply(
+                "please send the photo directly or hide sender name if you want to frowarded it from another chat."
+            )
+            continue
+
+        saved_photo = await photo_message.forward(MEDIA_CHAT)
+        new_media.append(saved_photo.id)
+        if len(new_media) + len(media) < 3:
+            await photo_message.reply(
+                "You can send a new photo or send /done to save or /cancel to discard"
+            )
+        else:
+            break
+
+    if not new_media:
+        return await message.reply("Ok.")
+
+    for id in new_media:
+        update = {"$push": {f"questions.{question_id-1}.media": id}}
+        db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, update)
+
+    if len(new_media) == 1:
+        await photo_message.reply("1 Photo added succefully", quote=True)
+    else:
+        await photo_message.reply(
+            f"{len(new_media)} Photos added succefully", quote=True
+        )
+
+    photo_message.text = f"/edit_question_{question_id}_{quiz_id}"
+    await edit_question(photo_message, db_client)
+
+
+@users_only
+async def delete_media(app, message, db_client):
+    parts = message.text.split("_")
+    (
+        image_index,
+        question_id,
+        quiz_id,
+    ) = (
+        int(parts[2]),
+        int(parts[3]),
+        parts[4],
+    )
+    quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
+    if not quiz:
+        return await message.reply("Quiz not found, may be it is deleted?", qoute=True)
+
+    user = message.from_user
+    if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        return await message.reply("Only quiz owner can do this")
+
+    quiz_questions = quiz["questions"]
+    if len(quiz_questions) < question_id:
+        return await message.reply(
+            f"Queston not found, Quiz {quiz['title']} contains {len(quiz_questions)} questions"
+        )
+
+    media = quiz_questions[question_id - 1]["media"]
+    if image_index > len(media):
+        return await message.reply("Media Not Found")
+
+    await user.stop_listening()
+    confirm = await user.ask(
+        "Are you sure you want to delete this image?\n" "/yes\t/no"
+    )
+    if confirm.text != "/yes":
+        return await confirm.reply("Cancelled")
+
+    media_id = media.pop(image_index - 1)
+
+    update = {"$set": {f"questions.{question_id-1}.media": media}}
+    db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, update)
+
+    try:
+        media_in_db = await app.get_messages(MEDIA_CHAT, media_id)
+        await media_in_db.copy(
+            MEDIA_CHAT,
+            caption=f"{user.username}: {user.first_name} {user.last_name}: {user.id}",
+        )
+        await media_in_db.delete()
+    except:
+        pass
+
+    await confirm.reply("Image deleted succefully", quote=True)
+    confirm.text = f"/edit_question_{question_id}_{quiz_id}"
+    await edit_question(confirm, db_client)

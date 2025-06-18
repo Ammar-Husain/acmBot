@@ -4,31 +4,11 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import ChannelInvalid, ChannelPrivate, UserNotParticipant
 from pyrogram.types import KeyboardButton, ReplyKeyboardMarkup, RequestPeerTypeChat
 
+from methods.common import check_bot_status_in_chat, users_only
 from models.quiz import ALPHABET
 
 
-async def check_bot_status_in_chat(app, chat_id):
-    status = "Not a member \U000026A0"
-    try:
-        bot_as_group_member = await app.get_chat_member(chat_id, "me")
-        if bot_as_group_member.status == ChatMemberStatus.ADMINISTRATOR:
-            status = "Admin \U00002713"
-        else:
-            status = "User \U000026A0 (<b>must be an Admin!</b>)"
-
-    except ChannelPrivate:
-        pass
-
-    except ChannelInvalid:
-        if str(chat_id).startswith("-100"):
-            return await check_bot_status_in_chat(app, chat_id + 1000000000000)
-
-    except UserNotParticipant:
-        status = "Link broken delete this team and re add it please"
-
-    return status
-
-
+@users_only
 async def add_teams(app, message, db_client):
     user = message.from_user
     await message.reply(
@@ -46,7 +26,7 @@ async def add_teams(app, message, db_client):
     teams = []
     while True:
         await message.reply(
-            "Choose the Group of the new team or save and exit with /done\n"
+            "Use the button to choose the Group of the new team or save and exit with /done\n"
             "To discared the added teams and exit send /cancel",
             reply_markup=request_group_keyboard,
         )
@@ -71,7 +51,9 @@ async def add_teams(app, message, db_client):
             await group_message.reply("Make the Bot admin in this group first.")
             continue
 
-        await message.reply("What do you want this team to be called?")
+        await message.reply(
+            "What do you want this team to be called? (the name will be used in the competations)"
+        )
         team_name_message = await user.listen(filters.text)
         team_name = team_name_message.text
         if team_name == "/cancel":
@@ -107,6 +89,7 @@ async def add_teams(app, message, db_client):
     await group_message.reply("Your teams have been Added succefully")
 
 
+@users_only
 async def my_teams(app, message, db_client):
     user = message.from_user
     user_teams = db_client.acmbDB.users.find_one({"_id": user.id}, {"teams": 1})[
@@ -129,6 +112,7 @@ async def my_teams(app, message, db_client):
     await message.reply(teams_preview, quote=True)
 
 
+@users_only
 async def delete_team(message, db_client):
     team_order = message.text.split("delete_team_")[1]
     if not team_order.isnumeric():
@@ -158,6 +142,7 @@ async def delete_team(message, db_client):
     await message.reply(f"Team <b>{team['team_name']}</b> has been removed.")
 
 
+@users_only
 async def create_set(app, message, db_client):
     user = message.from_user
     user_teams = db_client.acmbDB.users.find_one({"_id": user.id}, {"teams": 1})[
@@ -213,8 +198,8 @@ async def create_set(app, message, db_client):
             continue
 
         indexes = [int(p.strip()) - 1 for p in parts]
-
-        if [i for i in indexes if i > len(valid_teams) or i < 0]:
+        print(f"valid teams length: {len(valid_teams)}, indexes: {indexes}")
+        if [i for i in indexes if i >= len(valid_teams) or i < 0]:
             await indexes_message.reply("Please choose numbers from the list only")
             continue
 
@@ -253,6 +238,7 @@ async def create_set(app, message, db_client):
         break
 
 
+@users_only
 async def my_sets(message, db_client, for_comp=False):
     user = message.from_user
     user_data = db_client.acmbDB.users.find_one(
@@ -282,6 +268,7 @@ async def my_sets(message, db_client, for_comp=False):
         )
 
 
+@users_only
 async def delete_set(message, db_client):
     user = message.from_user
     set_id = int(message.text.split("delete_set_")[1])

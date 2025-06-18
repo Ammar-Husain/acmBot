@@ -5,9 +5,8 @@ from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import Chat, InlineKeyboardButton, InlineKeyboardMarkup, PollOption
 
-from .teams import check_bot_status_in_chat, my_sets
-
-admin = ChatMemberStatus.ADMINISTRATOR
+from methods.common import MEDIA_CHAT, check_bot_status_in_chat, users_only
+from methods.teams import my_sets
 
 
 async def is_admin(chat_or_id, user_id, app=None):
@@ -19,11 +18,12 @@ async def is_admin(chat_or_id, user_id, app=None):
         else:
             return False
 
-        return user_as_member.status == admin
+        return user_as_member.status == ChatMemberStatus.ADMINISTRATOR
     except:
         return False
 
 
+@users_only
 async def start_competition(app, message, db_client):
     user = message.from_user
     await message.reply(
@@ -102,8 +102,9 @@ async def start_competition(app, message, db_client):
         if mode_message.text == "/cancel":
             return await mode_message.reply("Cancelld", quote=True)
         elif mode_message.text == "/solo":
-            await mode_message.reply("Solo mode is selected")
-            return await solo_competition_button(mode_message, quiz_id, time)
+            # await mode_message.reply("Solo mode is selected")
+            # return await solo_competition_button(mode_message, quiz_id, time)
+            await solo_competition_button(mode_message, quiz_id, time)
         elif mode_message.text == "/teams":
             await mode_message.reply("Teams mode is selected")
             return await teams_competition_button(
@@ -194,6 +195,7 @@ async def teams_competition_button(app, message, quiz_id, question_time, db_clie
 
 
 async def begin_solo_competition(message, quiz_id, question_time, db_client):
+    await message.replu("Not yet Implemented.")
     user = message.from_user
     return
 
@@ -247,6 +249,8 @@ async def begin_teams_competition(
         return
 
     question_time = int(question_time)
+    questions = quiz["questions"]
+    q_count = len(questions)
 
     ready_button = InlineKeyboardButton("Yes, I am ready!", callback_data="ready")
     ready_count_button = InlineKeyboardButton("No one is ready yet.", callback_data="t")
@@ -258,20 +262,21 @@ async def begin_teams_competition(
         "<b>ARE YOY READY?</b>\n\n"
         f"Our Competition today is one quiz <u><b>{quiz['title']}</b></u>!!\n\n"
         "<u><b>Competition Rules</b></u>:\n\n"
-        "1. Each questoin will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll.\n\n"
+        "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll.\n\n"
         f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} secodns), <b>after which you can't vote.</b>\n\n"
         "3. The option that get the highest number of votes in your group team is <b>your group choice</b>, if correct your group get a point else <u><b>you lose a point</b></u>\n\n"
         "4. If voting result was tie between more than one option, you lose the point even if one them was correct."
-        "5. It is <b>prohibitied</b> to answer the questoin here or discuss before the question is closed\n\n"
+        "5. It is <b>prohibitied</b> to answer the question here or discuss before the question is closed\n\n"
         "6. You can discuss and request more explanatoin <u><b>between questoins</b></u>\n\n",
         reply_markup=keyboard,
     )
     await asyncio.sleep(2)
 
     await message.reply(
-        f"<b>Quiz Title</b>: <u><b>{quiz['title']}</b></u>\n\n"
-        f"Description:  {quiz['description']}\n\n"
-        f"Time per question: {question_time} seconds.\n\n"
+        f"<u><b>Quiz Title</b></u>: <b>{quiz['title'].title()}</b>.\n\n"
+        f"<u><b>Questoins Number: </b></u>: <b>{q_count} Questions</b>.\n\n"
+        f"<u><b>Description</b></u>:  <b>{quiz['description'].title()}</b>.\n\n"
+        f"<u><b>Time Per Question</b></u>: <b>{question_time} seconds.</b>\n\n"
         "<b>GOOD LUCK!</b>",
         quote=False,
     )
@@ -317,8 +322,6 @@ async def begin_teams_competition(
 
     await start_command_message.reply("Alright! Starting the competition in:")
 
-    questions = quiz["questions"]
-    q_count = len(questions)
     teams_results = dict()
     for team in valid_teams:
         teams_results[team["_id"]] = []
@@ -342,12 +345,22 @@ async def begin_teams_competition(
 
         round_polls = {}
         for team in valid_teams:
+            if question["media"]:
+                for image_id in question["media"]:
+                    photo_message = await app.get_messages(MEDIA_CHAT, image_id)
+                    await photo_message.copy(team["_id"])
+
             poll_message = await app.send_poll(
                 team["_id"], question_text, options, open_period=question_time
             )
             await poll_message.reply(f"You have {question_time} seconds to vote!")
 
             round_polls[team["_id"]] = poll_message.id
+
+        if question["media"]:
+            for image_id in question["media"]:
+                photo_message = await app.get_messages(MEDIA_CHAT, image_id)
+                await photo_message.copy(comp_chat.id)
 
         question_message_text = f"{question_text}\n\n" + "\n".join(
             [option.text for option in options]
@@ -364,7 +377,7 @@ async def begin_teams_competition(
         await asyncio.sleep(question_time / 4)
         await broadcast(app, broadcast_groups, f"{question_time // 4} seconds left!.")
 
-        left_for_3 = question_time / 4 - 4
+        left_for_3 = question_time / 4 - 3
         print(left_for_3)
         await asyncio.sleep(left_for_3)
 
@@ -381,9 +394,9 @@ async def begin_teams_competition(
         await asyncio.sleep(5)
 
         await app.send_message(comp_chat.id, "<u><b>The Correct Answer is:</b></u>\n\n")
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
         await app.send_message(comp_chat.id, "\U0001F941  " * 3)
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
         correct_answer_message_text = (
             f"<b>{OPTIONS_LETTERS[correct_option_id]} \U00002705</b>\n\n"
             f"<b>{options[correct_option_id].text}</b>"
@@ -398,7 +411,7 @@ async def begin_teams_competition(
 
         await asyncio.sleep(1)
 
-        results_message_text = "<u><b>Round Results: </b></u>\n\n"
+        results_message_text = f"<u><b>Round {i+1} Results: </b></u>\n\n"
 
         for team in valid_teams:
             result = await get_poll_result(app, team["_id"], round_polls[team["_id"]])
@@ -438,11 +451,11 @@ async def begin_teams_competition(
     sorted_teams = sorted(
         valid_teams, key=lambda a: sum(teams_results[a["_id"]]), reverse=True
     )
-
+    highest_score = sum(teams_results[sorted_teams[0]["_id"]])
     firsts = [
         team["team_name"].upper()
         for team in sorted_teams
-        if sum(teams_results[team["_id"]]) == sorted_teams[0]["_id"]
+        if sum(teams_results[team["_id"]]) == highest_score
     ]
 
     await app.send_message(comp_chat.id, "<b>This Was the Last Question!!</b>")
@@ -463,13 +476,13 @@ async def begin_teams_competition(
 
     if len(firsts) == 1:
         winning_team_message_text = (
-            f"{firsts[0]} 🎉 🎉 🎉 " "\n\n\n <b>CONGRATULATIONS 🫡</b>"
+            f"<b>{firsts[0]} 🎉 🎉 🎉</b> " "\n\n\n <b>CONGRATULATIONS 🫡</b>"
         )
     else:
         winning_team_message_text = (
             "<b>We Have A Tie</b> 🤯\n\n"
             "Congratulations To:\n\n"
-            f"{[first + ' 🎉 🎉 🎉\n\n' for first in firsts]}"
+            f"{"\n\n".join([ "<b>" + first + ' 🎉 🎉 🎉' + "</b>" for first in firsts])}"
         )
 
     await app.send_message(comp_chat.id, winning_team_message_text)

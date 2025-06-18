@@ -85,7 +85,7 @@ async def main():
     @app.on_message(filters.private & filters.regex(r"^/test_quiz_(\w+)$"))
     async def handle_show_quiz(app, message):
         print("Called")
-        await quizzes.test_quiz(message, db_client)
+        await quizzes.test_quiz(app, message, db_client)
 
     # questions related actions
     @app.on_message(filters.private & filters.regex(r"^/edit_quiz_questions_(\w+)$"))
@@ -96,9 +96,29 @@ async def main():
     async def handle_edit_question(app, message):
         await questions.edit_question(message, db_client)
 
+    @app.on_message(
+        filters.private & filters.regex(r"^/edit_explanation_([0-9]*)_(\w+)$")
+    )
+    async def handle_edit_question_explanation(app, message):
+        await questions.edit_question_explanation(message, db_client)
+
     @app.on_message(filters.private & filters.regex(r"^/add_questions_(\w+)$"))
     async def handle_add_questions(app, message):
         await questions.add_questions(message, db_client)
+
+    @app.on_message(filters.private & filters.regex(r"^/add_media_([0-9]*)_(\w+)$"))
+    async def handle_add_media(app, message):
+        await questions.add_media(message, db_client)
+
+    @app.on_message(filters.private & filters.regex(r"^/media_([0-9]*)$"))
+    async def handle_get_media(app, message):
+        await questions.get_media(app, message)
+
+    @app.on_message(
+        filters.private & filters.regex(r"^/delete_media_([1-3])_([0-9*])_(\w+)$")
+    )
+    async def handle_delete_media(app, message):
+        await questions.delete_media(app, message, db_client)
 
     @app.on_message(
         filters.private & filters.regex(r"^/delete_question_([0-9]*)_(\w+)$")
@@ -207,7 +227,7 @@ if __name__ == "__main__":
     import signal
 
     shutdown_event = asyncio.Event()
-    handle_sigterm = lambda _, __: shutdown_event.set
+    handle_sigterm = lambda _, __: shutdown_event.set()
 
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)

@@ -1,17 +1,15 @@
+import dotenv
 from pyrogram import enums, filters
-from pyrogram.types import PollOption
+from pyrogram.types import Message, PollOption
 
+from methods.common import MEDIA_CHAT, user_is_quiz_owner, users_only
 from models import Quiz, QuizPreview, QuizQuestion
 
 
-def user_is_quiz_owner(user_id, quiz_id, db_client):
-    is_owner = db_client.acmbDB.users.find_one({"_id": user_id, "quizzes._id": quiz_id})
-    return bool(is_owner)
-
-
+@users_only
 async def create_quiz(message, db_client):
     await message.reply(
-        "Let's Create a new Quiz together!, send your new quizz title, or /cancel_quiz to cancel.",
+        "Let's Create a new Quiz together!, send your new quizz title (the title will appear in the competations), or /cancel_quiz to cancel.",
         quote=True,
     )
     user = message.from_user
@@ -23,7 +21,7 @@ async def create_quiz(message, db_client):
     await title_message.reply(f"Your new quiz title is <b>{title}</b> !", quote=True)
 
     await title_message.reply(
-        "Send a description for your quiz or skip by sending /skip or cancel by /cancel_quiz",
+        "Send a description for your quiz (will appear in the competations) or skip by sending /skip or cancel by /cancel_quiz",
         quote=True,
     )
     description_message = await user.listen(filters.text)
@@ -37,13 +35,43 @@ async def create_quiz(message, db_client):
 
     await title_message.reply(
         "You can start sending your quiz questions as polls (must be in <b>quiz mode</b>).\n"
+        "You can send up to 3 images before the poll to be sended before the question later\n"
         "When you are done use /save_quiz to save the quiz or /cancel_quiz to cancel it.",
         quote=True,
     )
     quiz = Quiz(title=title, description=description, questions=[])
-
+    photos_messages_ids = []
     while True:
         question_message = await user.listen()
+        if question_message.photo:
+            if len(photos_messages_ids) == 3:
+                await question_message.reply(
+                    "maximum 3 images per question, /unsave to be able to add."
+                )
+                continue
+
+            photo_message = await question_message.forward(MEDIA_CHAT)
+            photos_messages_ids.append(photo_message.id)
+
+            await question_message.reply(
+                "This photo has been saved for the next quiz\n"
+                "if you send it accedentily you can /unsave it",
+                quote=True,
+            )
+            continue
+
+        if question_message.text == "/unsave":
+            if photos_messages_ids:
+                photos_messages_ids.pop(-1)
+                await question_message.reply(
+                    "The last photo has been removed, you can continue", quote=True
+                )
+                continue
+            else:
+                await question_message.reply(
+                    "There is no photos to be unsaved, you can continue", quote=True
+                )
+                continue
 
         if question_message.text == "/save_quiz":
             db_client.acmbDB.quizzes.insert_one(quiz.as_dict())
@@ -77,7 +105,7 @@ async def create_quiz(message, db_client):
             continue
 
         try:
-            question = QuizQuestion(question_message)
+            question = QuizQuestion(question_message, media=photos_messages_ids)
         except ValueError:
             await question_message.reply(
                 "for the bot to get access to the solution of a forwarded quiz it must be closed.\n"
@@ -89,6 +117,8 @@ async def create_quiz(message, db_client):
             )
             await question_message.reply(question_message.poll, quote=True)
             continue
+        else:
+            photos_messages_ids = []
 
         quiz.add_question(question)
         await question_message.reply(
@@ -97,10 +127,11 @@ async def create_quiz(message, db_client):
         )
 
 
+@users_only
 async def my_quizzes(message, db_client):
-    user = db_client.acmbDB.users.find_one({"_id": message.from_user.id})
-    if not user:
-        return await message.reply("send /start first")
+    user = db_client.acmbDB.users.find_one(
+        {"_id": message.from_user.id}, {"quizzes": 1}
+    )
     review_text = (
         "Your Quizzes:\n"
         if user["quizzes"]
@@ -124,6 +155,7 @@ async def my_quizzes(message, db_client):
         )
 
 
+@users_only
 async def delete_quiz(message, db_client):
     quiz_id = message.text.split("delete_quiz_")[1]
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
@@ -157,6 +189,7 @@ async def delete_quiz(message, db_client):
     )
 
 
+@users_only
 async def edit_title(message, db_client):
     user = message.from_user
     quiz_id = message.text.split("edit_title_")[1]
@@ -186,6 +219,7 @@ async def edit_title(message, db_client):
     )
 
 
+@users_only
 async def edit_description(message, db_client):
     user = message.from_user
     quiz_id = message.text.split("edit_description_")[1]
@@ -248,7 +282,8 @@ async def edit_description(message, db_client):
         )
 
 
-async def test_quiz(message, db_client):
+@users_only
+async def test_quiz(app, message, db_client):
     quiz_id = message.text.split("test_quiz_")[1]
     quiz = db_client.acmbDB.quizzes.find_one({"_id": quiz_id})
     if not quiz:
@@ -258,7 +293,18 @@ async def test_quiz(message, db_client):
         await message.reply("Only quiz owner can do this")
 
     questions = quiz["questions"]
+    if not questions:
+        await message.reply(
+            f"This quiz is empty!, add some questions to it by /add_questions_{quiz_id}",
+            quote=True,
+        )
+
     for question in questions:
+        if question["media"]:
+            for image_id in question["media"]:
+                image_message = await app.get_messages(MEDIA_CHAT, image_id)
+                await image_message.copy(message.chat.id)
+
         options = [PollOption(option["text"]) for option in question["options"]]
         correct_option_id = [
             i for i, option in enumerate(question["options"]) if option["is_correct"]
