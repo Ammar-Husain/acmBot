@@ -2,3 +2,4 @@ pymongo[srv]
 pyrofork
 tgcrypto
 nanoid
+dotenv

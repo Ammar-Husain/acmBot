@@ -1,6 +1,5 @@
-import dotenv
 from pyrogram import enums, filters
-from pyrogram.types import Message, PollOption
+from pyrogram.types import PollOption
 
 from methods.common import MEDIA_CHAT, user_is_quiz_owner, users_only
 from models import Quiz, QuizPreview, QuizQuestion
