@@ -81,15 +81,15 @@ async def start_competition(app, message, db_client):
 
     while True:
         await message.reply(
-            "Send the time available for each question in senconds (minimum: 30, maximum: 300)\n"
+            "Send the time available for each question in senconds (minimum: 90, maximum: 300)\n"
             "send /cancel to cancel"
         )
         time_message = await user.listen(filters.text)
         time = time_message.text
         if time == "/cancel":
             return await time_message.reply("Cancelld", quote=True)
-        elif not (time.isnumeric() and 30 <= int(time) <= 300):
-            await time_message.reply("Time must be a number between 30 and 300")
+        elif not (time.isnumeric() and 90 <= int(time) <= 300):
+            await time_message.reply("Time must be a number between 90 and 300")
             continue
         else:
             await time_message.reply(f"Each question will last for {time} second.")
