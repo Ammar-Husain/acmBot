@@ -1,10 +1,17 @@
 import base64
+import re
 from datetime import datetime, timedelta
 
 from pymongo.mongo_client import asyncio
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
-from pyrogram.types import Chat, InlineKeyboardButton, InlineKeyboardMarkup, PollOption
+from pyrogram.types import (
+    Chat,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    PollOption,
+)
 
 from methods.common import check_bot_status_in_chat, get_media_chat, users_only
 from methods.teams import my_sets
@@ -18,7 +25,6 @@ async def is_admin(chat_or_id, user_id, app=None):
             user_as_member = await chat_or_id.get_member(user_id)
         else:
             return False
-        print(user_as_member.status)
         return user_as_member.status == ChatMemberStatus.ADMINISTRATOR
     except Exception as e:
         print(f"Error: {e}")
@@ -33,7 +39,7 @@ async def start_competition(app, message, db_client):
         "/yes \t /no",
         quote=True,
     )
-    ready_message = await user.listen(filters.text)
+    ready_message = await user.listen(filters.private & filters.text)
     if ready_message.text != "/yes":
         return await ready_message.reply(
             "prepare the quiz and teams set first", quote=True
@@ -55,7 +61,7 @@ async def start_competition(app, message, db_client):
     )
 
     while True:
-        quiz_message = await user.listen(filters.text)
+        quiz_message = await user.listen(filters.private & filters.text)
         if quiz_message.text == "/cancel":
             return await quiz_message.reply("Cancelld", quote=True)
 
@@ -84,7 +90,7 @@ async def start_competition(app, message, db_client):
             "Send the time available for each question in senconds (minimum: 90, maximum: 300)\n"
             "send /cancel to cancel"
         )
-        time_message = await user.listen(filters.text)
+        time_message = await user.listen(filters.private & filters.text)
         time = time_message.text
         if time == "/cancel":
             return await time_message.reply("Cancelld", quote=True)
@@ -100,7 +106,7 @@ async def start_competition(app, message, db_client):
             "Do you want the competition to be in /solo or /teams mode?\n"
             "to cancel send /cancel"
         )
-        mode_message = await user.listen(filters.text)
+        mode_message = await user.listen(filters.private & filters.text)
         if mode_message.text == "/cancel":
             return await mode_message.reply("Cancelld", quote=True)
         elif mode_message.text == "/solo":
@@ -164,7 +170,9 @@ async def teams_competition_button(app, message, quiz_id, question_time, db_clie
                 result = db_client.acmbDB.users.update_one(
                     {"_id": user.id, "sets._id": _set["_id"]}, update
                 )
-                await message.reply(f"{result.matched_count, result.modified_count}")
+                print(
+                    f"matched: {result.matched_count}\ndeleted: {result.modified_count}"
+                )
                 _set["teams_ids"].pop(i)
             else:
                 invalid_teams.append({"name": team_name[0], "status": status})
@@ -182,7 +190,7 @@ async def teams_competition_button(app, message, quiz_id, question_time, db_clie
             "/ignore them and start the competition with the valid teams only\n"
             "or /exit and fix them (recommended)"
         )
-        choice_message = await user.listen(filters.text)
+        choice_message = await user.listen(filters.private & filters.text)
         if choice_message.text != "/ignore":
             return await choice_message.reply("Exited", quote=True)
 
@@ -202,9 +210,12 @@ async def begin_solo_competition(message, quiz_id, question_time, db_client):
     return
 
 
-async def broadcast(app, chat_ids, text):
-    for id in chat_ids:
-        await app.send_message(id, text)
+async def broadcast(app, chat_ids_or_messages, text):
+    for id_or_message in chat_ids_or_messages:
+        if isinstance(id_or_message, Message):
+            await id_or_message.reply(text, quote=False)
+        else:
+            await app.send_message(id_or_message, text)
 
 
 async def get_poll_result(app, chat_id, message_id):
@@ -264,12 +275,12 @@ async def begin_teams_competition(
         "<b>ARE YOY READY?</b>\n\n"
         f"Our Competition today is one quiz <u><b>{quiz['title']}</b></u>!!\n\n"
         "<u><b>Competition Rules</b></u>:\n\n"
-        "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll.\n\n"
-        f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} secodns), <b>after which you can't vote.</b>\n\n"
-        "3. The option that get the highest number of votes in your group team is <b>your group choice</b>, if correct your group get a point else <u><b>you lose a point</b></u>\n\n"
-        "4. If voting result was tie between more than one option, you lose the point even if one them was correct."
-        "5. It is <b>prohibitied</b> to answer the question here or discuss before the question is closed\n\n"
-        "6. You can discuss and request more explanatoin <u><b>between questoins</b></u>\n\n",
+        "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll\n\n."
+        f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} seconds), <b>after which you can't vote</b>.\n\n"
+        "3. The option that get the highest number of votes in your group team is <b>your group choice</b>, if correct your group get a point else <u><b>you lose a point</b></u>.\n\n"
+        "4. If voting result was tie between more than one option, you lose the point even if one them was correct\n\n."
+        "5. It is <b>prohibitied</b> to answer the question here or discuss here before the question is closed\n\n."
+        "6. You can discuss and request more explanations here <u><b>between questions</b></u>\n\n.",
         reply_markup=keyboard,
     )
     await asyncio.sleep(2)
@@ -286,6 +297,7 @@ async def begin_teams_competition(
     valid_groups_ids = [
         g_id for g_id in _set["teams_ids"] if await is_admin(g_id, "me", app=app)
     ]
+
     user_teams = user_data["teams"]
     valid_teams = [team for team in user_teams if team["_id"] in valid_groups_ids]
     print(valid_teams)
@@ -306,7 +318,8 @@ async def begin_teams_competition(
         "هوي والله أنا بمشي بخلي ليكم المسابقة دي حسي.",
         "معاي منو؟",
     ]
-    OPTIONS_LETTERS = ["A)", "B)", "C)", "D)", "E)", "F)", "G)", "H)", "I)", "J)"]
+    letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    OPTIONS_LETTERS = [f"<b>{letter})</b> " for letter in letters]
 
     while True:
         start_command_message = await comp_chat.listen(
@@ -339,8 +352,23 @@ async def begin_teams_competition(
         await asyncio.sleep(1)
         await start_command_message.reply("Go!", quote=False)
 
-        question_text = f"<b>[{i+1}/{q_count}]</b>. " + question["question"]
-        options = [PollOption(option["text"]) for option in question["options"]]
+        # cleaning questoin from numbering i.e [i/j] or i.
+        cleaned_question = re.sub(
+            r"^\[?\s*\d*\s*/?\s*\d+\s*(\.|-|\)|\])", "", question["question"].strip()
+        )
+
+        # cleaning optoins from numbering
+        question_text = f"<b>[{i+1}/{q_count}]</b>. " + cleaned_question
+        cleaned_options = [
+            re.sub(r"^\w\s{0,2}(\)|\.)", "", option["text"].strip())
+            for option in question["options"]
+        ]
+
+        # creating poll options and numbering them
+        options = [
+            PollOption(OPTIONS_LETTERS[i] + option)
+            for i, option in enumerate(cleaned_options)
+        ]
         correct_option_id = [
             i for i, option in enumerate(question["options"]) if option["is_correct"]
         ][0]
@@ -364,9 +392,11 @@ async def begin_teams_competition(
         if question["media"]:
             for image_id in question["media"]:
                 photo_message = await app.get_messages(media_chat.id, image_id)
-                await photo_message.copy(comp_chat.id, caption="")
+                await message.reply_photo(
+                    photo_message.photo.file_id, caption="", quote=False
+                )
 
-        question_message_text = f"{question_text}\n\n" + "\n".join(
+        question_message_text = f"{question_text}\n\n" + "\n\n".join(
             [option.text for option in options]
         )
         question_message = await message.reply(question_message_text, quote=False)
@@ -374,11 +404,11 @@ async def begin_teams_competition(
             "Vote in your groups!\n" f"You have {question_time} seconds!"
         )
 
-        broadcast_groups = valid_groups_ids + [comp_chat.id]
-        await asyncio.sleep(question_time / 2 - 1)
+        broadcast_groups = valid_groups_ids + [question_message]
+        await asyncio.sleep(question_time / 2)
         await broadcast(app, broadcast_groups, f"{question_time // 2} seconds left!.")
 
-        await asyncio.sleep(question_time / 4 - 1)
+        await asyncio.sleep(question_time / 4)
         await broadcast(app, broadcast_groups, f"{question_time // 4} seconds left!.")
 
         left_for_3 = (close_date - datetime.now()).seconds - 3
@@ -397,16 +427,18 @@ async def begin_teams_competition(
         await broadcast(app, valid_groups_ids, "Results are in the group!")
         await asyncio.sleep(7)
 
-        await app.send_message(comp_chat.id, "<u><b>The Correct Answer is:</b></u>\n\n")
+        await question_message.reply(
+            "<u><b>The Correct Answer is:</b></u>\n\n", quote=False
+        )
         await asyncio.sleep(3)
-        await app.send_message(comp_chat.id, "\U0001F941  " * 3)
+        await question_message.reply("\U0001F941  " * 3, quote=False)
         await asyncio.sleep(3)
         correct_answer_message_text = (
-            f"<b>{OPTIONS_LETTERS[correct_option_id]} \U00002705</b>\n\n"
+            f"{OPTIONS_LETTERS[correct_option_id]} \U00002705\n\n"
             f"<b>{options[correct_option_id].text}</b>"
         )
-        correct_answer_message = await app.send_message(
-            comp_chat.id, correct_answer_message_text
+        correct_answer_message = await question_message.reply(
+            correct_answer_message_text, quote=False
         )
         await asyncio.sleep(1)
         if explanation:
@@ -462,20 +494,20 @@ async def begin_teams_competition(
         if sum(teams_results[team["_id"]]) == highest_score
     ]
 
-    await app.send_message(comp_chat.id, "<b>This Was the Last Question!!</b>")
+    await message.reply("<b>This Was the Last Question!!</b>", quote=False)
     await asyncio.sleep(3)
 
-    await app.send_message(comp_chat.id, "<b>Are You Ready??</b>")
+    await message.reply("<b>Are You Ready??</b>", quote=False)
     await asyncio.sleep(3)
-    await app.send_message(comp_chat.id, "<b>RESULTS TIME!!</b>")
+    await message.reply("<b>RESULTS TIME!!</b>", quote=False)
     await asyncio.sleep(2)
-    await app.send_message(comp_chat.id, "<b>And the Winning team is.....</b>")
+    await message.reply("<b>And the Winning team is.....</b>", quote=False)
     await asyncio.sleep(1)
-    await app.send_message(comp_chat.id, "\U0001F941")
+    await message.reply("\U0001F941", quote=False)
     await asyncio.sleep(2)
-    await app.send_message(comp_chat.id, "\U0001F941")
+    await message.reply("\U0001F941", quote=False)
     await asyncio.sleep(2)
-    await app.send_message(comp_chat.id, "\U0001F941")
+    await message.reply("\U0001F941", quote=False)
     await asyncio.sleep(2)
 
     if len(firsts) == 1:
@@ -489,15 +521,15 @@ async def begin_teams_competition(
             f"{"\n\n".join([ "<b>" + first + ' 🎉 🎉 🎉' + "</b>" for first in firsts])}"
         )
 
-    await app.send_message(comp_chat.id, winning_team_message_text)
+    await message.reply(winning_team_message_text, quote=False)
 
     await asyncio.sleep(2)
 
     results_text = "<u><b>END RESULTS</b></u>:\n\n"
 
-    for team in sorted_teams:
-        results_text += f"<b>{team['team_name'].title()}: \t {sum(teams_results[team['_id']])} Points</b>\n\n"
+    for i, team in enumerate(sorted_teams):
+        results_text += f"<b>{i+1}. {team['team_name'].title()}: \t {sum(teams_results[team['_id']])} Points</b>.\n\n"
 
-    await app.send_message(comp_chat.id, results_text)
+    end_results_message = await message.reply(results_text, quote=False)
     await asyncio.sleep(2)
-    await app.send_message(comp_chat.id, "See You in the next Competition 🖐️")
+    await end_results_message.reply("See You in the next Competition 🖐️")

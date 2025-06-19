@@ -123,13 +123,15 @@ async def edit_question(message, db_client):
 
     while True:
         try:
-            user_command = await user.listen(filters.text & allow_external_filter)
+            user_command = await user.listen(
+                filters.private & filters.text & allow_external_filter
+            )
         except:
             return
 
         if user_command.text == "/back":
             user_command.text = f"/edit_quiz_questions_{quiz_id}"
-            return await edit_quiz_questions(message, db_client)
+            return await edit_quiz_questions(user_command, db_client)
 
         elif user_command.text == "/exit":
             await user_command.reply("Exited.", quote=True)
@@ -155,16 +157,19 @@ async def edit_question(message, db_client):
 
             option_text = question["options"][int(option_id) - 1]["text"]
             await user_command.reply(
-                f"Send new value for the option `{option_text}`", quote=True
+                f"Send new text for the option `{option_text}` or send /cancel",
+                quote=True,
             )
-            updated_option = await user.listen(filters.text)
+            updated_option = await user.listen(filters.private & filters.text)
+            if updated_option.text == "/cancel":
+                await updated_option.reply("Cancelled", quote=True)
             update = {
                 "$set": {
                     f"questions.{question_id-1}.options.{option_id-1}.text": updated_option.text
                 }
             }
             db_client.acmbDB.quizzes.update_one({"_id": quiz_id}, update)
-            await user_command.reply(
+            await updated_option.reply(
                 f"Option {option_id} has been edited succefully.", quote=True
             )
 
@@ -197,7 +202,7 @@ async def edit_question(message, db_client):
                 quote=True,
             )
 
-            confirmation_message = await user.listen(filters.text)
+            confirmation_message = await user.listen(filters.private & filters.text)
             if confirmation_message.text != "/yes":
                 await confirmation_message.reply("Option delteion cancelled")
                 continue
@@ -220,7 +225,7 @@ async def edit_question(message, db_client):
                     f'{"\n".join([f"/option_{i}" for i in range(1, len(options)+1)])}\n'
                     "send /cancel to cancel"
                 )
-                corr_op_message = await user.listen(filters.text)
+                corr_op_message = await user.listen(filters.private & filters.text)
                 corr_option = corr_op_message.text
                 valid_option = re.match(r"^/option_([1-9])$", corr_option)
                 if valid_option:
@@ -288,7 +293,7 @@ async def edit_question_explanation(message, db_client):
         )
 
     await message.reply("Send new explanation\nsend /cancel to cancel")
-    exp_message = await user.listen(filters.text)
+    exp_message = await user.listen(filters.private & filters.text)
     if exp_message.text == "/cancel":
         return await exp_message.reply("Cancelled", quote=True)
 
@@ -332,7 +337,7 @@ async def add_options(message, db_client):
     )
 
     while True:
-        option_message = await user.listen(filters.text)
+        option_message = await user.listen(filters.private & filters.text)
         if option_message.text == "/exit":
             option_message.text = f"/edit_question_{question_id}_{quiz_id}"
             return await edit_question(option_message, db_client)
@@ -349,7 +354,7 @@ async def add_options(message, db_client):
             "option added\nsend /add_another_option to add another option, /exit or anything else to exit"
         )
 
-        another = await user.listen(filters.text)
+        another = await user.listen(filters.private & filters.text)
         if another.text == "/add_another_option":
             await another.reply("Send the option text, /exit to exit")
         else:
@@ -384,7 +389,7 @@ async def delete_question(message, db_client):
         f"that says `{question['question']}`?\n"
         "to confirm send /yes to cancel send /cancel or anythin else"
     )
-    confirmation_message = await user.listen(filters.text)
+    confirmation_message = await user.listen(filters.private & filters.text)
     if confirmation_message.text != "/yes":
         await confirmation_message.reply("Cancelled")
     else:
@@ -425,7 +430,7 @@ async def add_questions(app, message, db_client):
     photos_messages_ids = []
     while True:
         print("listening")
-        question_message = await user.listen()
+        question_message = await user.listen(filters.private)
         if question_message.photo:
             if len(photos_messages_ids) == 3:
                 await question_message.reply(

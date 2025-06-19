@@ -12,7 +12,7 @@ async def create_quiz(app, message, db_client):
         quote=True,
     )
     user = message.from_user
-    title_message = await user.listen(filters.text)
+    title_message = await user.listen(filters.private & filters.text)
     print(title_message.text)
     if title_message.text == "/cancel_quiz":
         await title_message.reply("Cancelled.", quote=True)
@@ -24,7 +24,7 @@ async def create_quiz(app, message, db_client):
         "Send a description for your quiz (will appear in the competations) or skip by sending /skip or cancel by /cancel_quiz",
         quote=True,
     )
-    description_message = await user.listen(filters.text)
+    description_message = await user.listen(filters.private & filters.text)
     if description_message.text == "/cancel_quiz":
         await title_message.reply(f"<b>{title}</b> Cancelled.", quote=True)
         return
@@ -43,7 +43,7 @@ async def create_quiz(app, message, db_client):
     photos_messages_ids = []
     media_chat = await get_media_chat(app)
     while True:
-        question_message = await user.listen()
+        question_message = await user.listen(filters.private)
         if question_message.photo:
             if len(photos_messages_ids) == 3:
                 await question_message.reply(
@@ -176,7 +176,7 @@ async def delete_quiz(message, db_client):
         "to confirm send /yes to cancel send /cancel or anything else.",
         quote=True,
     )
-    confirmation_message = await user.listen()
+    confirmation_message = await user.listen(filters.private & filters.text)
 
     if not confirmation_message.text == "/yes":
         await confirmation_message.reply("Quiz Deletion Cancelled.", quote=True)
@@ -205,7 +205,7 @@ async def edit_title(message, db_client):
     if not user_is_quiz_owner(user.id, quiz_id, db_client):
         return await message.reply("Only quiz owner can do this")
 
-    title_message = await user.listen(filters.text)
+    title_message = await user.listen(filters.private & filters.text)
     new_title = title_message.text
     if new_title == "/cancel":
         await title_message.reply("Changing title cancelld.", quote=True)
@@ -254,7 +254,7 @@ async def edit_description(message, db_client):
             "Send the description or send /cancel to cancel"
         )
 
-    description_message = await user.listen(filters.text)
+    description_message = await user.listen(filters.private & filters.text)
 
     if description_message.text == "/cancel":
         await message.reply("Editig description Cancelled.", quote=True)

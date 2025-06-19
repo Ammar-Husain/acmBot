@@ -1,7 +1,9 @@
 import os
+import re
 from base64 import b64decode
 
 from pyrogram import Client, filters
+from pyrogram.enums import ChatType
 from pyrogram.types import (
     BotCommand,
     CallbackQuery,
@@ -72,13 +74,13 @@ async def main():
             "Steps to To Start A Competition:\n\n"
             "1. Create a quiz from /create_quiz or obtain link for a quiz created by another user.\n\n"
             "2. Create you teams from /add_teams\n\n."
-            "3. Bot your teams In a set from /create_set.\n\n"
+            "3. put your teams In a set from /create_set.\n\n"
             "4. Configure your competition from /start_competition and obtain a starting button.\n\n"
             "5. When You are ready press the button and choose the group in which the competition will be held, and let the rest to the Bot!!"
         )
         second = (
-            "You can edit your (add / edit / delete ) quizzes/questions/options in /my_quizzes\n\n"
-            "You can edit your teams and sets in /my_teams / /my_sets"
+            "You can edit (add / edit / delete ) your quizzes/questions/options in /my_quizzes\n\n"
+            "You can add and delete your teams and sets in /my_teams / /my_sets"
         )
         await message.reply(instructions)
         await message.reply(second)
@@ -182,13 +184,13 @@ async def main():
     async def handle_delete_set(app, message):
         await teams.delete_set(message, db_client)
 
-    def encoded(_, __, update):
+    def encoded(_, __, u):
         try:
-            print(update.text)
-            text = update.text.replace("@Awasi_CMbot", "").strip()
-            if text and len(text) % 4 == 0:
-                command = b64decode(text.encode()).decode()
-                if "," in command:
+            print(u.text)
+            command = re.findall(r"@\w+\s(.+)", u.text)
+            if command and len(command[0]) % 4 == 0:
+                decoded = b64decode(command[0].encode()).decode()
+                if "," in decoded:
                     return True
         except:
             pass
@@ -197,13 +199,15 @@ async def main():
 
     encoded_filter = filters.create(encoded)
 
-    @app.on_message(filters.group & encoded_filter)
+    def is_forum(_, __, m):
+        return m.chat and m.chat.type == ChatType.FORUM
+
+    forum_filter = filters.create(is_forum)
+
+    @app.on_message((filters.group | forum_filter) & encoded_filter)
     async def handle_encoded_group_message(app, message):
-        parts = (
-            b64decode(message.text.replace("Awasi_CMbot", "").strip().encode())
-            .decode()
-            .split(",")
-        )
+        command = re.findall(r"@\w+\s(.+)", message.text)[0]
+        parts = b64decode(command.encode()).decode().split(",")
         if len(parts) == 2:
             quiz_id, question_time = parts[0], parts[1]
             await competitions.begin_solo_competition(

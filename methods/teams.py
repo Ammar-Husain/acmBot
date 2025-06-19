@@ -31,7 +31,7 @@ async def add_teams(app, message, db_client):
             reply_markup=request_group_keyboard,
         )
 
-        group_message = await user.listen()
+        group_message = await user.listen(filters.private)
         if group_message.text == "/done":
             if not teams:
                 await group_message.reply(
@@ -54,7 +54,7 @@ async def add_teams(app, message, db_client):
         await message.reply(
             "What do you want this team to be called? (the name will be used in the competations)"
         )
-        team_name_message = await user.listen(filters.text)
+        team_name_message = await user.listen(filters.private & filters.text)
         team_name = team_name_message.text
         if team_name == "/cancel":
             return await team_name_message.reply("Cancelld", quote=True)
@@ -86,7 +86,7 @@ async def add_teams(app, message, db_client):
                 update,
             )
 
-    await group_message.reply("Your teams have been Added succefully")
+    await group_message.reply("Your teams have been saved succefully.")
 
 
 @users_only
@@ -130,15 +130,13 @@ async def delete_team(message, db_client):
         f"Are you sure you want to delete <b>{team['team_name']}</b> team?\n"
         "Send /yes to confirm or /no or anything else to cancel"
     )
-    confirmation_message = await user.listen(filters.text)
+    confirmation_message = await user.listen(filters.private & filters.text)
 
     if not confirmation_message.text == "/yes":
         return await message.reply("Cancelled", quote=True)
 
     update = {"$pull": {"teams": {"_id": team["_id"]}}}
-    db_client.acmbDB.users.update_one(
-        {"_id": user.id, "teams._id": team["_id"]}, update
-    )
+    db_client.acmbDB.users.update_one({"_id": user.id}, update)
     await message.reply(f"Team <b>{team['team_name']}</b> has been removed.")
 
 
@@ -156,7 +154,7 @@ async def create_set(app, message, db_client):
 
     await message.reply("What do you want to call the set?\n" "Send /cancel to cancel")
 
-    name_message = await user.listen(filters.text)
+    name_message = await user.listen(filters.private & filters.text)
     if name_message.text == "/cancel":
         return await name_message.reply("Cancelled", quote=True)
     set_name = name_message.text
@@ -185,7 +183,7 @@ async def create_set(app, message, db_client):
     await name_message.reply(teams_preview)
 
     while True:
-        indexes_message = await user.listen(filters.text)
+        indexes_message = await user.listen(filters.private & filters.text)
         if indexes_message.text == "/cancel":
             return await indexes_message.reply("Cancelled", quote=True)
 
@@ -216,7 +214,7 @@ async def create_set(app, message, db_client):
             "/confirm \t\t /cancel",
             quote=True,
         )
-        confirmation_message = await user.listen(filters.text)
+        confirmation_message = await user.listen(filters.private & filters.text)
         if not confirmation_message.text == "/confirm":
             await confirmation_message.reply(
                 "Try sending the numbers again or /cancel the set"
@@ -283,7 +281,7 @@ async def delete_set(message, db_client):
         f"Are you sure you want to delete set <b>{_set['name']}</b>?\n" "/yes \t /no"
     )
 
-    confirmation_message = await user.listen(filters.text)
+    confirmation_message = await user.listen(filters.private & filters.text)
     if confirmation_message.text != "/yes":
         return await confirmation_message.reply("Cancelled", quote=True)
 
