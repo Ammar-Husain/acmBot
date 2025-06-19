@@ -29,6 +29,7 @@ async def main():
     API_HASH = os.getenv("API_HASH")
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     DB_URI = os.getenv("DB_URI")
+    ADMINS_LIST = os.getenv("ADMINS_IDS", "").split(",")
 
     app = Client(name="acmb", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
     await app.start()
@@ -85,8 +86,6 @@ async def main():
         await message.reply(instructions)
         await message.reply(second)
 
-    ADMINS_LIST = os.getenv("ADMINS_IDS", "").split(",")
-
     def is_admin(_, __, u):
         print(ADMINS_LIST)
         admin = bool(u.from_user and str(u.from_user.id) in ADMINS_LIST)
@@ -105,7 +104,7 @@ async def main():
             for user in users:
                 user_chat = await app.get_chat(user["_id"])
                 await message.reply(
-                    f"{user_chat.username}: {user_chat.first_name} {users_chat.last_name or ''}"
+                    f"{user_chat.username}: {user_chat.first_name} {user_chat.last_name or ''}"
                 )
                 await message.reply(user)
             return
