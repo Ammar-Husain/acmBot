@@ -85,6 +85,45 @@ async def main():
         await message.reply(instructions)
         await message.reply(second)
 
+    ADMINS_LIST = os.getenv("ADMINS_IDS", "").split(",")
+
+    def is_admin(_, __, u):
+        print(ADMINS_LIST)
+        admin = bool(u.from_user and str(u.from_user.id) in ADMINS_LIST)
+        print(admin)
+        return admin
+
+    admins_filter = filters.create(is_admin)
+
+    @app.on_message(admins_filter & filters.command("dump_db"))
+    async def handle_dump_db(app, message):
+        await message.reply(message.from_user.id)
+        parts = message.text.split(" ")
+        print(len(parts))
+        users = db_client.acmbDB.users.find({})
+        if len(parts) == 1:
+            for user in users:
+                user_chat = await app.get_chat(user["_id"])
+                await message.reply(
+                    f"{user_chat.username}: {user_chat.first_name} {users_chat.last_name or ''}"
+                )
+                await message.reply(user)
+            return
+        if parts[1] == "quizzes":
+            if len(parts) == 3 and parts[2].isnumeric():
+                user = [user for user in users if user["_id"] == int(parts[2])]
+                if not user:
+                    return await message.reply("User not found")
+                user = user[0]
+                user_quizzes_id = [quiz["_id"] for quiz in user["quizzes"]]
+                quizzes = db_client.acmbDB.quizzes.find(
+                    {"_id": {"$in": user_quizzes_id}}
+                )
+                if not quizzes:
+                    return await message.reply("User has no quizzes")
+                for quizz in quizzes:
+                    await message.reply(quizz)
+
     # quizzes related actions
     @app.on_message(filters.private & filters.command("create_quiz"))
     async def handle_create_quiz(app, message):

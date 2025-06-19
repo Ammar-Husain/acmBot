@@ -257,7 +257,7 @@ async def begin_teams_competition(
         print("quiz not found")
         return
 
-    if not (question_time.isnumeric() and 0 < int(question_time) < 300):
+    if not (question_time.isnumeric() and 90 < int(question_time) < 300):
         print("Invalid question time")
         return
 
