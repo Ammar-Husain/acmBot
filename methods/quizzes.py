@@ -1,8 +1,12 @@
+import os
+
 from pyrogram import enums, filters
 from pyrogram.types import PollOption
 
 from methods.common import get_media_chat, user_is_quiz_owner, users_only
 from models import Quiz, QuizPreview, QuizQuestion
+
+ADMINS_LIST = os.getenv("ADMINS_LIST", "").split(",")
 
 
 @users_only
@@ -12,11 +16,19 @@ async def create_quiz(app, message, db_client):
         quote=True,
     )
     user = message.from_user
-    title_message = await user.listen(filters.private & filters.text)
-    print(title_message.text)
-    if title_message.text == "/cancel_quiz":
-        await title_message.reply("Cancelled.", quote=True)
-        return
+    while True:
+        title_message = await user.listen(filters.private & filters.text)
+        print(title_message.text)
+        if title_message.text == "/cancel_quiz":
+            await title_message.reply("Cancelled.", quote=True)
+            return
+        elif title_message.text.startswith("/"):
+            await title_message.reply(
+                "Send question tilte or cancel with /cancel", quote=True
+            )
+            continue
+        break
+
     title = title_message.text
     await title_message.reply(f"Your new quiz title is <b>{title}</b> !", quote=True)
 
@@ -152,9 +164,10 @@ async def my_quizzes(message, db_client):
             f"{i+1}. <u><b>{title}</b><u>\t /edit_title_{id}\n\n"
             f"Description: {description or "No Description"}\t /edit_description_{id}\n\n"
             f"Number of questions: {questions_count}\n"
-            f"/edit_quiz_questions_{id}\n\n"
-            f"/test_quiz_{id}\n\n"
-            f"/delete_quiz_{id}"
+            f"Edit questions: /edit_quiz_questions_{id}\n\n"
+            f"Test qustions: /test_quiz_{id}\n\n"
+            f"Export quiz link: /link_quiz_{id}\n\n"
+            f"Delete: /delete_quiz_{id}"
         )
 
 
@@ -293,7 +306,8 @@ async def test_quiz(app, message, db_client):
         return await message.reply("Quiz not found, may be it is deleted?")
     user = message.from_user
     if not user_is_quiz_owner(user.id, quiz_id, db_client):
-        await message.reply("Only quiz owner can do this")
+        if not str(user.id) in ADMINS_LIST:
+            return await message.reply("Only quiz owner can do this")
 
     questions = quiz["questions"]
     if not questions:
@@ -320,3 +334,8 @@ async def test_quiz(app, message, db_client):
             correct_option_id=correct_option_id,
             explanation=question["explanation"],
         )
+
+
+async def link_quiz(message):
+    link = message.text.replace("link_", "")
+    await message.reply(f"Your Quiz link is {link}")

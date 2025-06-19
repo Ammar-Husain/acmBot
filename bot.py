@@ -1,6 +1,7 @@
 import os
 import re
 from base64 import b64decode
+from pprint import pformat
 
 from pyrogram import Client, filters
 from pyrogram.enums import ChatType
@@ -87,9 +88,7 @@ async def main():
         await message.reply(second)
 
     def is_admin(_, __, u):
-        print(ADMINS_LIST)
         admin = bool(u.from_user and str(u.from_user.id) in ADMINS_LIST)
-        print(admin)
         return admin
 
     admins_filter = filters.create(is_admin)
@@ -98,15 +97,18 @@ async def main():
     async def handle_dump_db(app, message):
         await message.reply(message.from_user.id)
         parts = message.text.split(" ")
-        print(len(parts))
         users = db_client.acmbDB.users.find({})
         if len(parts) == 1:
             for user in users:
-                user_chat = await app.get_chat(user["_id"])
-                await message.reply(
-                    f"{user_chat.username}: {user_chat.first_name} {user_chat.last_name or ''}"
-                )
-                await message.reply(user)
+                try:
+                    user_chat = await app.get_chat(user["_id"])
+                    await message.reply(
+                        f"{user_chat.username}: {user_chat.first_name} {user_chat.last_name or ''}"
+                    )
+                except:
+                    await message.reply(f"Couldn't access {user["_id"]}")
+
+                await message.reply(pformat(user))
             return
         if parts[1] == "quizzes":
             if len(parts) == 3 and parts[2].isnumeric():
@@ -115,13 +117,14 @@ async def main():
                     return await message.reply("User not found")
                 user = user[0]
                 user_quizzes_id = [quiz["_id"] for quiz in user["quizzes"]]
+                await message.reply(pformat(user_quizzes_id))
                 quizzes = db_client.acmbDB.quizzes.find(
                     {"_id": {"$in": user_quizzes_id}}
                 )
                 if not quizzes:
                     return await message.reply("User has no quizzes")
                 for quizz in quizzes:
-                    await message.reply(quizz)
+                    await message.reply(pformat(quizz, indent=2))
 
     # quizzes related actions
     @app.on_message(filters.private & filters.command("create_quiz"))
@@ -146,8 +149,11 @@ async def main():
 
     @app.on_message(filters.private & filters.regex(r"^/test_quiz_(\w+)$"))
     async def handle_show_quiz(app, message):
-        print("Called")
         await quizzes.test_quiz(app, message, db_client)
+
+    @app.on_message(filters.private & filters.regex(r"^/link_quiz_(\w+)$"))
+    async def handle_link_quiz(app, message):
+        await quizzes.link_quiz(message)
 
     # questions related actions
     @app.on_message(filters.private & filters.regex(r"^/edit_quiz_questions_(\w+)$"))

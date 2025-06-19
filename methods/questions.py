@@ -32,15 +32,16 @@ async def edit_quiz_questions(message, db_client):
     title = quiz["title"]
     questions = quiz["questions"]
     questions_panel = (
-        f"<b>{title}</b>:\n"
+        f"<b>{title.title()}</b>:\n\n"
         f"Number of questions: {len(questions)}\n"
-        f"/add_questions_{quiz_id}\n"
+        f"Add questoins: /add_questions_{quiz_id}\n\n"
     )
 
     for i, question in enumerate(questions):
         questions_panel += (
-            f"{i+1}. {question['question']}\n"
-            f"/edit_question_{i+1}_{quiz_id}\n/delete_question_{i+1}_{quiz_id}\n\n"
+            f"{i+1}. {question['question']}\n\n"
+            f"/edit_question_{i+1}_{quiz_id}\n\n"
+            f"/delete_question_{i+1}_{quiz_id}\n\n"
         )
 
     await message.reply(questions_panel, quote=True)
@@ -69,8 +70,8 @@ async def edit_question(message, db_client):
     question = quiz_questions[question_id - 1]
     options = question["options"]
     question_panel = (
-        f"<b>{quiz['title']}</b>:\n"
-        f"{question_id}. {question['question']}\n"
+        f"<b>{quiz['title'].title()}</b>:\n\n"
+        f"{question_id}. {question['question']}\n\n"
         f"/delete_question_{question_id}_{quiz_id}\n\n"
         f"/add_options_{question_id}_{quiz_id}\n\n"
     )
@@ -79,7 +80,8 @@ async def edit_question(message, db_client):
 
     for i, option in enumerate(options):
         question_panel += (
-            f"{i+1}.  {option['text']}\n" f"/edit_option_{i+1}\t/delete_option_{i+1}\n"
+            f"{i+1}.  {option['text']}\n"
+            f"/edit_option_{i+1}\t/delete_option_{i+1}\n\n"
         )
         if option["is_correct"]:
             correct_options_ids.append(i)
@@ -111,7 +113,7 @@ async def edit_question(message, db_client):
             f"/media_{j} \n /delete_media_{i+1}_{question_id}_{quiz_id}\n"
             for i, j in enumerate(media)
         ]
-        question_panel += f"Media:\n{"\n".join(media_text)}\n"
+        question_panel += f"Media:\n\n{"\n".join(media_text)}\n"
     else:
         question_panel += "Media: No Media\n"
 
