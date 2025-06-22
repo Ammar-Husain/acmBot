@@ -25,6 +25,7 @@ async def is_admin(chat_or_id, user_id, app=None):
             user_as_member = await chat_or_id.get_member(user_id)
         else:
             return False
+        print(user_as_member.status)
         return user_as_member.status == ChatMemberStatus.ADMINISTRATOR
     except Exception as e:
         print(f"Error: {e}")
@@ -257,7 +258,7 @@ async def begin_teams_competition(
         print("quiz not found")
         return
 
-    if not (question_time.isnumeric() and 90 < int(question_time) < 300):
+    if not (question_time.isnumeric() and 90 <= int(question_time) <= 300):
         print("Invalid question time")
         return
 
@@ -309,14 +310,14 @@ async def begin_teams_competition(
 
     SELLY_REPLIES = [
         "قلنا أدمنز بس معليش.",
-        "قلنا أدمنز بس معليش.",
-        "أدمنز بس دي لي منو 🙂",
-        "الله يهديك.",
-        "لقيتوها شغلة مش؟",
-        "الله يهديك.",
-        "يا محمد كمال عليك الله اتكلم مع الجماعة ديل، ما ممكن ياخي.",
-        "هوي والله أنا بمشي بخلي ليكم المسابقة دي حسي.",
-        "معاي منو؟",
+        # "قلنا أدمنز بس معليش.",
+        # "أدمنز بس دي لي منو 🙂",
+        # "الله يهديك.",
+        # "لقيتوها شغلة مش؟",
+        # "الله يهديك.",
+        # "يا محمد كمال عليك الله اتكلم مع الجماعة ديل، ما ممكن ياخي.",
+        # "هوي والله أنا بمشي بخلي ليكم المسابقة دي حسي.",
+        # "معاي منو؟",
     ]
     letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
     OPTIONS_LETTERS = [f"<b>{letter})</b> " for letter in letters]
@@ -477,7 +478,9 @@ async def begin_teams_competition(
         while True:
             next_command = await results_message.chat.listen(filters.command("next"))
             sender_id = next_command.from_user.id
-            if not sender_id == comp_creator_id and not is_admin(comp_chat, sender_id):
+            if not sender_id == comp_creator_id and not await is_admin(
+                comp_chat, sender_id
+            ):
                 await next_command.reply(SELLY_REPLIES[0], quote=True)
                 if len(SELLY_REPLIES) > 1:
                     SELLY_REPLIES.pop(0)

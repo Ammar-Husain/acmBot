@@ -6,7 +6,12 @@ from pyrogram.types import PollOption
 from methods.common import get_media_chat, user_is_quiz_owner, users_only
 from models import Quiz, QuizPreview, QuizQuestion
 
-ADMINS_LIST = os.getenv("ADMINS_LIST", "").split(",")
+if not os.getenv("PRODUCTION"):
+    import dotenv
+
+    ADMINS_LIST = dotenv.dotenv_values()["ADMINS_IDS"].split(",")
+else:
+    ADMINS_LIST = os.getenv("ADMINS_IDS", "").split(",")
 
 
 @users_only
@@ -306,6 +311,8 @@ async def test_quiz(app, message, db_client):
         return await message.reply("Quiz not found, may be it is deleted?")
     user = message.from_user
     if not user_is_quiz_owner(user.id, quiz_id, db_client):
+        print(str(user.id))
+        print(ADMINS_LIST)
         if not str(user.id) in ADMINS_LIST:
             return await message.reply("Only quiz owner can do this")
 
