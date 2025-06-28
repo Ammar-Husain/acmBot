@@ -2,6 +2,7 @@ import base64
 import re
 from datetime import datetime, timedelta
 
+import nanoid
 from pymongo.mongo_client import asyncio
 from pyrogram import filters
 from pyrogram.enums import ChatMemberStatus
@@ -26,7 +27,10 @@ async def is_admin(chat_or_id, user_id, app=None):
         else:
             return False
         print(user_as_member.status)
-        return user_as_member.status == ChatMemberStatus.ADMINISTRATOR
+        return user_as_member.status in [
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        ]
     except Exception as e:
         print(f"Error: {e}")
         return False
@@ -228,7 +232,7 @@ async def get_poll_result(app, chat_id, message_id):
 
 
 async def begin_teams_competition(
-    app, message, quiz_id, set_id, question_time, db_client
+    app, message, quiz_id, set_id, question_time, db_client, teams_results=[]
 ):
     comp_creator_id = message.from_user.id
     comp_chat = message.chat
@@ -262,39 +266,6 @@ async def begin_teams_competition(
         print("Invalid question time")
         return
 
-    question_time = int(question_time)
-    questions = quiz["questions"]
-    q_count = len(questions)
-
-    ready_button = InlineKeyboardButton("Yes, I am ready!", callback_data="ready")
-    ready_count_button = InlineKeyboardButton("No one is ready yet.", callback_data="t")
-    keyboard = InlineKeyboardMarkup([[ready_button], [ready_count_button]])
-
-    await message.reply(
-        "<b>Welcome Everyone!!\n\n</b>"
-        "<b>Let's Start the Battle!</b>\n"
-        "<b>ARE YOY READY?</b>\n\n"
-        f"Our Competition today is one quiz <u><b>{quiz['title']}</b></u>!!\n\n"
-        "<u><b>Competition Rules</b></u>:\n\n"
-        "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll\n\n."
-        f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} seconds), <b>after which you can't vote</b>.\n\n"
-        "3. The option that get the highest number of votes in your group team is <b>your group choice</b>, if correct your group get a point else <u><b>you lose a point</b></u>.\n\n"
-        "4. If voting result was tie between more than one option, you lose the point even if one them was correct\n\n."
-        "5. It is <b>prohibitied</b> to answer the question here or discuss here before the question is closed\n\n."
-        "6. You can discuss and request more explanations here <u><b>between questions</b></u>\n\n.",
-        reply_markup=keyboard,
-    )
-    await asyncio.sleep(2)
-
-    await message.reply(
-        f"<u><b>Quiz Title</b></u>: <b>{quiz['title'].title()}</b>.\n\n"
-        f"<u><b>Questoins Number: </b></u>: <b>{q_count} Questions</b>.\n\n"
-        f"<u><b>Description</b></u>:  <b>{quiz['description'].title()}</b>.\n\n"
-        f"<u><b>Time Per Question</b></u>: <b>{question_time} seconds.</b>\n\n"
-        "<b>GOOD LUCK!</b>",
-        quote=False,
-    )
-
     valid_groups_ids = [
         g_id for g_id in _set["teams_ids"] if await is_admin(g_id, "me", app=app)
     ]
@@ -302,14 +273,63 @@ async def begin_teams_competition(
     user_teams = user_data["teams"]
     valid_teams = [team for team in user_teams if team["_id"] in valid_groups_ids]
     print(valid_teams)
+
+    stoped_at = len(teams_results[valid_teams[0]["_id"]]) if teams_results else 0
+    question_time = int(question_time)
+    questions = quiz["questions"][stoped_at:]
+    q_count = len(quiz["questions"])
+
+    ready_button = InlineKeyboardButton("Yes, I am ready!", callback_data="ready")
+    ready_count_button = InlineKeyboardButton("No one is ready yet.", callback_data="t")
+    keyboard = InlineKeyboardMarkup([[ready_button], [ready_count_button]])
+
+    quiz_title = quiz["title"] if not teams_results else quiz["title"] + " - Continued"
+
+    welcome_text = (
+        "<b>Welcome Everyone!!\n\n</b>"
+        "<b>Let's Start the Battle!</b>\n"
+        "<b>ARE YOY READY?</b>\n\n"
+        f"Our Competition today is one quiz <u><b>{quiz_title}</b></u>!!\n\n"
+        "<u><b>Competition Rules</b></u>:\n\n"
+        "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll\n\n."
+        f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} seconds), <b>after which you can't vote</b>.\n\n"
+        "3. The option that get the highest number of votes in your group team is <b>your group choice</b>, if correct your group get a point else <u><b>you lose a point</b></u>.\n\n"
+        "4. If voting result was tie between more than one option, you lose the point even if one them was correct\n\n."
+        "5. It is <b>prohibitied</b> to answer the question here or discuss here before the question is closed\n\n."
+        "6. You can discuss and request more explanations here <u><b>between questions</b></u>\n\n."
+    )
+
+    if not teams_results:
+        await message.reply(
+            welcome_text,
+            reply_markup=keyboard,
+        )
+        await asyncio.sleep(2)
+
+    await message.reply(
+        f"<u><b>Quiz Title</b></u>: <b>{quiz_title.title()}</b>.\n\n"
+        f"<u><b>Questoins Number: </b></u>: <b>{q_count} Questions</b>.\n\n"
+        f"<u><b>Description</b></u>:  <b>{quiz['description'].title()}</b>.\n\n"
+        f"<u><b>Time Per Question</b></u>: <b>{question_time} seconds.</b>\n\n"
+        "<b>GOOD LUCK!</b>",
+        quote=False,
+    )
+
+    if teams_results:
+        await message.reply(
+            f"Last Time we stopped at question {stoped_at}!, now we will continue."
+        )
+
     await asyncio.sleep(3)
     await message.reply(
-        "When everyone is ready <b>any admin</b> can send /start_competition to start",
+        "When everyone is ready <b>any admin</b> can send /start_competition to start\n\n"
+        "To pause the competition after starting, just send /pause",
         quote=False,
     )
 
     SELLY_REPLIES = [
-        "قلنا أدمنز بس معليش.",
+        "Sorry, Commands Are For Admins Only.",
+        # "قلنا أدمنز بس معليش.",
         # "قلنا أدمنز بس معليش.",
         # "أدمنز بس دي لي منو 🙂",
         # "الله يهديك.",
@@ -338,13 +358,15 @@ async def begin_teams_competition(
 
     await start_command_message.reply("Alright! Starting the competition in:")
 
-    teams_results = dict()
-    for team in valid_teams:
-        teams_results[team["_id"]] = []
+    if not teams_results:
+        teams_results = dict()
+        for team in valid_teams:
+            teams_results[team["_id"]] = []
 
     await asyncio.sleep(1)
     media_chat = await get_media_chat(app)
-    for i, question in enumerate(questions):
+    for question in questions:
+        i = len(teams_results[valid_teams[0]["_id"]])
         await start_command_message.reply("3", quote=False)
         await asyncio.sleep(1)
         await start_command_message.reply("2", quote=False)
@@ -375,7 +397,7 @@ async def begin_teams_competition(
         ][0]
         explanation = question["explanation"]
 
-        close_date = datetime.now() + timedelta(seconds=question_time + 1)
+        close_date = datetime.now() + timedelta(seconds=question_time)
         round_polls = {}
         for team in valid_teams:
             if question["media"]:
@@ -426,7 +448,7 @@ async def begin_teams_competition(
 
         await asyncio.sleep(1)
         await broadcast(app, valid_groups_ids, "Results are in the group!")
-        await asyncio.sleep(7)
+        await asyncio.sleep(3)
 
         await question_message.reply(
             "<u><b>The Correct Answer is:</b></u>\n\n", quote=False
@@ -476,7 +498,9 @@ async def begin_teams_competition(
         )
 
         while True:
-            next_command = await results_message.chat.listen(filters.command("next"))
+            next_command = await results_message.chat.listen(
+                filters.command("next") | filters.command("pause")
+            )
             sender_id = next_command.from_user.id
             if not sender_id == comp_creator_id and not await is_admin(
                 comp_chat, sender_id
@@ -485,7 +509,18 @@ async def begin_teams_competition(
                 if len(SELLY_REPLIES) > 1:
                     SELLY_REPLIES.pop(0)
             else:
-                break
+                if "next" in next_command.text:
+                    break
+                else:
+                    return await handle_competition_pause(
+                        next_command,
+                        comp_creator_id,
+                        quiz_id,
+                        set_id,
+                        question_time,
+                        teams_results,
+                        db_client,
+                    )
 
     sorted_teams = sorted(
         valid_teams, key=lambda a: sum(teams_results[a["_id"]]), reverse=True
@@ -536,3 +571,29 @@ async def begin_teams_competition(
     end_results_message = await message.reply(results_text, quote=False)
     await asyncio.sleep(2)
     await end_results_message.reply("See You in the next Competition 🖐️")
+
+
+async def handle_competition_pause(
+    message, set_owner_id, quiz_id, set_id, question_time, teams_results, db_client
+):
+    teams_results = {str(id): results for id, results in teams_results.items()}
+    question_time = str(question_time)
+    data = {
+        "_id": nanoid.generate(size=8),
+        "set_owner_id": set_owner_id,
+        "quiz_id": quiz_id,
+        "set_id": set_id,
+        "question_time": question_time,
+        "teams_results": teams_results,
+    }
+
+    result = db_client.acmbDB.paused_compos.insert_one(data)
+    data_id = result.inserted_id
+    continue_button = InlineKeyboardButton(
+        "Continue Competition", callback_data=f"continue_{data_id}"
+    )
+    keyboard = InlineKeyboardMarkup([[continue_button]])
+    await message.reply(
+        "Competition has been Paused, whenever you are ready to continue any admin can press this button.",
+        reply_markup=keyboard,
+    )

@@ -3,11 +3,12 @@ import re
 from base64 import b64decode
 from pprint import pformat
 
-from pyrogram import Client, filters
+from pyrogram import Client, enums, filters
 from pyrogram.enums import ChatType
 from pyrogram.types import (
     BotCommand,
     CallbackQuery,
+    ChatMember,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -230,7 +231,6 @@ async def main():
 
     def encoded(_, __, u):
         try:
-            print(u.text)
             command = re.findall(r"@\w+\s(.+)", u.text)
             if command and len(command[0]) % 4 == 0:
                 decoded = b64decode(command[0].encode()).decode()
@@ -263,30 +263,74 @@ async def main():
                 app, message, quiz_id, set_id, question_time, db_client
             )
 
-    @app.on_callback_query()
-    async def hanlde_callback_query(client, callback_query: CallbackQuery):
-        button_id = str(callback_query.inline_message_id)
-        user = callback_query.from_user
-        if callback_query.data == "ready":
-            if not button_id in buttons_counters:
-                buttons_counters[button_id] = []
-            if not user.id in buttons_counters[button_id]:
-                buttons_counters[button_id].append(user.id)
-                await callback_query.answer(f"Nice! {user.first_name}, Keep It Up!")
+    async def read_cb(_, __, callback_query):
+        return callback_query.data == "ready"
 
-                start_button = InlineKeyboardButton(
-                    "Yes, I am ready!", callback_data="ready"
-                )
-                print(len(buttons_counters[button_id]))
-                ready_count_button = InlineKeyboardButton(
-                    f"{len(buttons_counters[button_id])} are Ready!", callback_data="t"
-                )
-                keyboard = InlineKeyboardMarkup([[start_button], [ready_count_button]])
-                await callback_query.message.edit_reply_markup(keyboard)
-            else:
-                await callback_query.answer(
-                    f"Ok we got it!, Hold up the competition will begin soon!!"
-                )
+    ready_cb_filter = filters.create(read_cb)
+
+    @app.on_callback_query(ready_cb_filter)
+    async def hanlde_callback_query(client, callback_query: CallbackQuery):
+        button_id = str(f"{callback_query.message.chat.id}/{callback_query.message.id}")
+        print(button_id)
+        print(callback_query.message.chat.id)
+        user = callback_query.from_user
+        if not button_id in buttons_counters:
+            buttons_counters[button_id] = []
+        if not user.id in buttons_counters[button_id]:
+            buttons_counters[button_id].append(user.id)
+            await callback_query.answer(f"Nice! {user.first_name}, Keep It Up!")
+
+            start_button = InlineKeyboardButton(
+                "Yes, I am ready!", callback_data="ready"
+            )
+            print(len(buttons_counters[button_id]))
+            ready_count_button = InlineKeyboardButton(
+                f"{len(buttons_counters[button_id])} are Ready!", callback_data="t"
+            )
+            keyboard = InlineKeyboardMarkup([[start_button], [ready_count_button]])
+            await callback_query.message.edit_reply_markup(keyboard)
+        else:
+            await callback_query.answer(
+                f"Ok we got it!, Hold up the competition will begin soon!!"
+            )
+
+    async def continue_comp_cbq(_, app, callback_query):
+        return "continue_" in callback_query.data or True
+
+    continue_comp_cbq_filter = filters.create(continue_comp_cbq)
+
+    @app.on_callback_query(continue_comp_cbq_filter)
+    async def handle_continue_comp_callback(app, callback_query):
+        button_presser = await app.get_chat_member(
+            callback_query.message.chat.id, callback_query.from_user.id
+        )
+        if not button_presser.status in [
+            enums.ChatMemberStatus.ADMINISTRATOR,
+            enums.ChatMemberStatus.OWNER,
+        ]:
+            await callback_query.answer("Sorry, Admins Only.")
+
+        paused_compo_id = callback_query.data.replace("continue_", "")
+        paused_compo = db_client.acmbDB.paused_compos.find_one({"_id": paused_compo_id})
+        if not paused_compo:
+            print("Paused compo not found")
+            return
+
+        await callback_query.answer("Alright, Continuing...")
+
+        callback_query.message.from_user.id = paused_compo["set_owner_id"]
+        teams_results = {
+            int(id): result for id, result in paused_compo["teams_results"].items()
+        }
+        await competitions.begin_teams_competition(
+            app,
+            callback_query.message,
+            paused_compo["quiz_id"],
+            paused_compo["set_id"],
+            paused_compo["question_time"],
+            db_client,
+            teams_results,
+        )
 
     await shutdown_event.wait()
     await app.stop()
