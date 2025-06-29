@@ -2,7 +2,9 @@ import os
 import re
 from base64 import b64decode
 from pprint import pformat
+from threading import Thread
 
+from flask import Flask
 from pyrogram import Client, enums, filters
 from pyrogram.enums import ChatType
 from pyrogram.types import (
@@ -16,6 +18,24 @@ from pyrogram.types import (
 
 from methods import competitions, mongo, questions, quizzes, teams
 from models import NewBotUser
+
+server = Flask(__name__)
+
+
+@server.route("/", methods=["GET"])
+def greet():
+    print("Request")
+    return "Hey there"
+
+
+def flask_thread():
+    server.run("0.0.0.0", port=8000)
+    print("Server runs succefully")
+
+
+thread = Thread(target=flask_thread)
+thread.start()
+
 
 buttons_counters = {}
 
