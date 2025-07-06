@@ -9,7 +9,7 @@ def run_flask():
     @server.route("/", methods=["GET"])
     def greet():
         print("Request")
-        return "ACM Bot is ON!"
+        return "ACMBot is UP"
 
     def flask_thread():
         server.run("0.0.0.0", port=8000)
