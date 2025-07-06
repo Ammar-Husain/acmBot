@@ -19,8 +19,11 @@ from models import NewBotUser
 
 buttons_counters = {}
 
+from flask_server import run_flask
+
 
 async def main():
+    run_flask()
     is_prod = os.getenv("PRODUCTION")
     if not is_prod:
         import dotenv
