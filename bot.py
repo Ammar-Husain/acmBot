@@ -41,8 +41,8 @@ async def main():
     print("Bot started")
 
     db_client = mongo.connect_to_mongo(DB_URI)
-    if not os.getenv("PRODUCTION"):
-        db_client = db_client.test
+    # if not os.getenv("PRODUCTION"):
+    #     db_client = db_client.test
 
     print("DataBase connected")
 

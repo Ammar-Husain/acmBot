@@ -92,15 +92,15 @@ async def start_competition(app, message, db_client):
 
     while True:
         await message.reply(
-            "Send the time available for each question in senconds (minimum: 90, maximum: 300)\n"
+            "Send the time available for each question in senconds (minimum: 60, maximum: 300)\n"
             "send /cancel to cancel"
         )
         time_message = await user.listen(filters.private & filters.text)
         time = time_message.text
         if time == "/cancel":
             return await time_message.reply("Cancelld", quote=True)
-        elif not (time.isnumeric() and 90 <= int(time) <= 300):
-            await time_message.reply("Time must be a number between 90 and 300")
+        elif not (time.isnumeric() and 60 <= int(time) <= 300):
+            await time_message.reply("Time must be a number between 60 and 300")
             continue
         else:
             await time_message.reply(f"Each question will last for {time} second.")
@@ -262,7 +262,7 @@ async def begin_teams_competition(
         print("quiz not found")
         return
 
-    if not (question_time.isnumeric() and 90 <= int(question_time) <= 300):
+    if not (question_time.isnumeric() and 60 <= int(question_time) <= 300):
         print("Invalid question time")
         return
 
@@ -327,6 +327,9 @@ async def begin_teams_competition(
         quote=False,
     )
 
+    MAX_QUESTION_LEN = 255
+    MAX_OPTION_LEN = 100
+    MAX_MESSAGE_LEN = 4096
     SELLY_REPLIES = [
         "Sorry, Commands Are For Admins Only.",
         # "قلنا أدمنز بس معليش.",
@@ -339,8 +342,24 @@ async def begin_teams_competition(
         # "هوي والله أنا بمشي بخلي ليكم المسابقة دي حسي.",
         # "معاي منو؟",
     ]
-    letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-    OPTIONS_LETTERS = [f"<b>{letter})</b> " for letter in letters]
+    letters = [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+    ]
+    OPTIONS_LETTERS = [f"**{letter})** " for letter in letters]
 
     while True:
         start_command_message = await comp_chat.listen(
@@ -380,18 +399,35 @@ async def begin_teams_competition(
             r"^\[?\s*\d*\s*/?\s*\d+\s*(\.|-|\)|\])", "", question["question"].strip()
         )
 
+        # numbering if possible
+        len_after_numbering = len(cleaned_question) + 9 + len(str(q_count)) * 2
+        if len_after_numbering <= MAX_QUESTION_LEN:
+            question_text = f"**[{i+1}/{q_count}]**. " + cleaned_question
+        elif len_after_numbering - 4 <= MAX_QUESTION_LEN:
+            question_text = f"[{i+1}/{q_count}]. " + cleaned_question
+        elif len_after_numbering - 7 <= MAX_QUESTION_LEN:
+            question_text = f"{i+1}/{q_count}. " + cleaned_question
+        elif len(cleaned_question) + len(str(i + 1)) + 1 <= MAX_QUESTION_LEN:
+            question_text = f"{i+1} " + cleaned_question
+        else:
+            question_text = cleaned_question
+
         # cleaning optoins from numbering
-        question_text = f"<b>[{i+1}/{q_count}]</b>. " + cleaned_question
         cleaned_options = [
             re.sub(r"^\w\s{0,2}(\)|\.)", "", option["text"].strip())
             for option in question["options"]
         ]
-
-        # creating poll options and numbering them
-        options = [
-            PollOption(OPTIONS_LETTERS[i] + option)
+        # adding numbering if possible
+        cleaned_options = [
+            (
+                OPTIONS_LETTERS[i] + option
+                if len(OPTIONS_LETTERS[i] + option) <= MAX_OPTION_LEN
+                else option
+            )
             for i, option in enumerate(cleaned_options)
         ]
+
+        options = [PollOption(option) for option in cleaned_options]
         correct_option_id = [
             i for i, option in enumerate(question["options"]) if option["is_correct"]
         ][0]
@@ -429,16 +465,16 @@ async def begin_teams_competition(
 
         broadcast_groups = valid_groups_ids + [question_message]
         await asyncio.sleep(question_time / 2)
-        await broadcast(app, broadcast_groups, f"{question_time // 2} seconds left!.")
+        await broadcast(app, broadcast_groups, f"{question_time // 2} seconds left!")
 
         await asyncio.sleep(question_time / 4)
-        await broadcast(app, broadcast_groups, f"{question_time // 4} seconds left!.")
+        await broadcast(app, broadcast_groups, f"{question_time // 4} seconds left!")
 
         left_for_3 = (close_date - datetime.now()).seconds - 3
         print(left_for_3)
         await asyncio.sleep(left_for_3)
 
-        await broadcast(app, broadcast_groups, "3 seconds left!.")
+        await broadcast(app, broadcast_groups, "3 seconds left!")
         await asyncio.sleep(1)
         await broadcast(app, broadcast_groups, "2")
         await asyncio.sleep(1)
@@ -466,7 +502,11 @@ async def begin_teams_competition(
         await asyncio.sleep(1)
         if explanation:
             explanatoin_message_text = "<u><b>EXPLANATION:</b></u>\n\n" f"{explanation}"
-            await correct_answer_message.reply(explanatoin_message_text)
+            if len(explanatoin_message_text) <= MAX_MESSAGE_LEN:
+                await correct_answer_message.reply(explanatoin_message_text)
+            else:
+                await correct_answer_message.reply("<u><b>EXPLANATION:</b></u>")
+                await correct_answer_message.reply(explanation)
 
         await asyncio.sleep(1)
 
@@ -475,7 +515,7 @@ async def begin_teams_competition(
         for team in valid_teams:
             result = await get_poll_result(app, team["_id"], round_polls[team["_id"]])
             if len(result) > 1 or result[0] != correct_option_id:
-                teams_results[team["_id"]].append(-1)
+                teams_results[team["_id"]].append(0)
             else:
                 teams_results[team["_id"]].append(1)
 
@@ -484,7 +524,7 @@ async def begin_teams_competition(
         ):
             name = team["team_name"].upper()
             team_results = teams_results[team["_id"]]
-            result = "+1" if team_results[-1] == 1 else "-1"
+            result = "+ 1" if team_results[-1] == 1 else "+ 0"
             results_message_text += f"<b>{name}</b>:\t\t <b>{result}</b> \U00002192\U00002192 {sum(team_results)}\n\n"
 
         results_message = await correct_answer_message.reply(results_message_text)
@@ -494,7 +534,8 @@ async def begin_teams_competition(
             break
 
         await results_message.reply(
-            "When You are ready for the next question <u>an admin</u> can send /next \U0001F60A."
+            "When You are ready for the next question <u>an admin</u> can send /next \U0001F60A.\n\n",
+            "You can also /pause the competition and continue anytime later.",
         )
 
         while True:
