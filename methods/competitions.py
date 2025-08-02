@@ -289,7 +289,7 @@ async def begin_teams_competition(
         "<b>Welcome Everyone!!\n\n</b>"
         "<b>Let's Start the Battle!</b>\n"
         "<b>ARE YOY READY?</b>\n\n"
-        f"Our Competition today is one quiz <u><b>{quiz_title}</b></u>!!\n\n"
+        f"Our Competition today is on quiz <u><b>{quiz_title}</b></u>!!\n\n"
         "<u><b>Competition Rules</b></u>:\n\n"
         "1. Each question will be sended here as a text and in <b>your teams groups</b> (functoinal divisions) as a poll\n\n."
         f"2. <b>Your are allowed to discuss the question together</b> but you have to vote within the question time limit (In this case {question_time} seconds), <b>after which you can't vote</b>.\n\n"
