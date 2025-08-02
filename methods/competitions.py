@@ -524,7 +524,7 @@ async def begin_teams_competition(
         ):
             name = team["team_name"].upper()
             team_results = teams_results[team["_id"]]
-            result = "+ 1" if team_results[-1] == 1 else "+ 0"
+            result = "+1" if team_results[-1] == 1 else "+0"
             results_message_text += f"<b>{name}</b>:\t\t <b>{result}</b> \U00002192\U00002192 {sum(team_results)}\n\n"
 
         results_message = await correct_answer_message.reply(results_message_text)
