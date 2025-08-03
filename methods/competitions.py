@@ -515,7 +515,7 @@ async def begin_teams_competition(
         for team in valid_teams:
             result = await get_poll_result(app, team["_id"], round_polls[team["_id"]])
             if len(result) > 1 or result[0] != correct_option_id:
-                teams_results[team["_id"]].append(0)
+                teams_results[team["_id"]].append(-1)
             else:
                 teams_results[team["_id"]].append(1)
 
@@ -524,7 +524,7 @@ async def begin_teams_competition(
         ):
             name = team["team_name"].upper()
             team_results = teams_results[team["_id"]]
-            result = "+1" if team_results[-1] == 1 else "+0"
+            result = "+1" if team_results[-1] == 1 else "-1"
             results_message_text += f"<b>{name}</b>:\t\t <b>{result}</b> \U00002192\U00002192 {sum(team_results)}\n\n"
 
         results_message = await correct_answer_message.reply(results_message_text)
