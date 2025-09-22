@@ -4,3 +4,4 @@ tgcrypto
 nanoid
 dotenv
 flask
+requests
