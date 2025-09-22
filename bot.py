@@ -1,8 +1,11 @@
+import asyncio
 import os
 import re
+import signal
 from base64 import b64decode
 from pprint import pformat
 
+import requests
 from pyrogram import Client, enums, filters
 from pyrogram.enums import ChatType
 from pyrogram.types import (
@@ -35,6 +38,9 @@ async def main():
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     DB_URI = os.getenv("DB_URI")
     ADMINS_LIST = os.getenv("ADMINS_IDS", "").split(",")
+
+    LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID"))
+    SERVICE_URL = os.getenv("SERVICE_URL")
 
     app = Client(name="acmb", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
     await app.start()
@@ -335,14 +341,36 @@ async def main():
             teams_results,
         )
 
+    async def log(app, text):
+        return await app.send_message(LOG_CHANNEL_ID, text)
+
+    async def ping_server():
+        if SERVICE_URL:
+            res = requests.get(SERVICE_URL)
+            return await log(app, res.text)
+        else:
+            return await log(
+                app,
+                "Warning: $SERVICE_URL is not set, the service can sleep at anytime.",
+            )
+
+    async def keep_up():
+        m = await ping_server()
+        while True:
+            try:
+                await asyncio.sleep(60)
+                await m.delete()
+                m = await ping_server()
+            except Exception as e:
+                await log(client, str(e))
+                pass
+
+    asyncio.create_task(keep_up())
     await shutdown_event.wait()
     await app.stop()
 
 
 if __name__ == "__main__":
-    import asyncio
-    import signal
-
     shutdown_event = asyncio.Event()
     handle_sigterm = lambda _, __: shutdown_event.set()
 
